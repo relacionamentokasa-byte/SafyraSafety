@@ -64,66 +64,69 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* BLOCO 1: Indicadores Principais de Vendas e Carteira */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 1. Faturamento Total */}
-        <div className="p-5 rounded-xl border bg-card flex flex-col justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Faturamento Total
-          </span>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+      {/* BLOCO 1: Indicadores Principais de Vendas e Carteira (Hero Mobile + Grid 2x2) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        {/* 1. Faturamento Total (Hero em tela cheia no mobile) */}
+        <div className="col-span-2 lg:col-span-1 p-4 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Faturamento Total
+            </span>
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          </div>
+          <div className="mt-2 md:mt-3">
+            <div className="text-2xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
               R$ {stats.totalSales.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <span className="text-xs text-muted-foreground mt-1 block">
+            <span className="text-[11px] md:text-xs text-muted-foreground mt-0.5 block">
               {stats.totalOrders} {stats.totalOrders === 1 ? 'pedido faturado' : 'pedidos faturados'}
             </span>
           </div>
         </div>
 
         {/* 2. Pedidos no Mês */}
-        <div className="p-5 rounded-xl border bg-card flex flex-col justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Volume de Pedidos
+        <div className="col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
+            Volume Pedidos
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+          <div className="mt-2 md:mt-3">
+            <div className="text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
               {stats.totalOrders}
             </div>
-            <span className="text-xs text-muted-foreground mt-1 block">
-              {stats.ordersToday} {stats.ordersToday === 1 ? 'pedido hoje' : 'pedidos hoje'}
+            <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+              {stats.ordersToday} hoje
             </span>
           </div>
         </div>
 
         {/* 3. Carteira de Clientes */}
-        <div className="p-5 rounded-xl border bg-card flex flex-col justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
             Carteira Ativa
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+          <div className="mt-2 md:mt-3">
+            <div className="text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
               {stats.activeClients}
-              <span className="text-sm font-normal text-muted-foreground ml-1">/ {stats.totalClients}</span>
+              <span className="text-xs md:text-sm font-normal text-muted-foreground ml-1">/ {stats.totalClients}</span>
             </div>
-            <span className="text-xs text-muted-foreground mt-1 block">
-              Clientes cadastrados
+            <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+              Cadastrados
             </span>
           </div>
         </div>
 
         {/* 4. Atendimentos de Campo */}
-        <div className="p-5 rounded-xl border bg-card flex flex-col justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="col-span-2 sm:col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+          <span className="text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
             Visitas Comerciais
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-bold font-mono text-foreground tracking-tight">
+          <div className="mt-2 md:mt-3">
+            <div className="text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
               {stats.completedVisits}
-              <span className="text-sm font-normal text-muted-foreground ml-1">concluídas</span>
+              <span className="text-xs md:text-sm font-normal text-muted-foreground ml-1">feitas</span>
             </div>
-            <span className="text-xs text-muted-foreground mt-1 block">
-              {stats.pendingVisits} {stats.pendingVisits === 1 ? 'visita agendada' : 'visitas agendadas'}
+            <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+              {stats.pendingVisits} {stats.pendingVisits === 1 ? 'agendada' : 'agendadas'}
             </span>
           </div>
         </div>

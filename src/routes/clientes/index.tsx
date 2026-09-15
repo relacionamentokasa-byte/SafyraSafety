@@ -537,32 +537,32 @@ function ClientsPage() {
               ) : clients.length > 0 ? (
                 clients.map((client) => {
                   return (
-                    <div key={client.id} className="p-4 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-3">
+                    <div key={client.id} className="p-3.5 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
                               {client.status === 'active' ? 'Ativo' : client.status === 'prospect' ? 'Prospect' : 'Inativo'}
                             </span>
                             {client.city && (
-                              <span className="text-xs font-medium text-slate-500">
+                              <span className="text-xs font-medium text-slate-500 truncate">
                                 {client.city}/{client.state}
                               </span>
                             )}
                           </div>
                           <Link to="/clientes/$id" params={{ id: client.id }}>
-                            <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors">
+                            <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors line-clamp-1">
                               {formatClientDisplayName(client)}
                             </h4>
                           </Link>
-                          <span className="font-mono text-xs text-slate-400 block mt-0.5">
+                          <span className="font-mono text-[11px] text-slate-400 block mt-0.5">
                             {client.cnpj}
                           </span>
                         </div>
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0 -mr-1">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -606,7 +606,7 @@ function ClientsPage() {
                           variant="buttons"
                         />
 
-                        <Button variant="outline" size="sm" className="h-8 text-xs font-semibold shrink-0 ml-auto" asChild>
+                        <Button variant="outline" size="sm" className="h-7.5 px-2.5 text-xs font-semibold shrink-0 ml-auto" asChild>
                           <Link to="/clientes/$id" params={{ id: client.id }}>
                             Ver Perfil
                           </Link>

@@ -291,9 +291,9 @@ function OrdersPage() {
 
         {/* Resumo Integrado de Status dos Pedidos */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="px-4 py-2.5 sm:px-5 sm:py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Status & Fluxo da Carteira de Pedidos
+              Status & Fluxo da Carteira
             </span>
             <span className="text-[11px] font-mono font-medium text-slate-400">
               {allOrdersData?.length || 0} pedidos no total
@@ -301,93 +301,93 @@ function OrdersPage() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
-            {/* Total Vendido */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
+            {/* Total Vendido (Destaque em 2 colunas no mobile) */}
+            <div className="col-span-2 sm:col-span-1 p-3.5 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors bg-slate-50/30 sm:bg-transparent">
+              <div className="mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Total Vendido
                 </span>
               </div>
               <div>
-                <div className="text-lg lg:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-xl sm:text-lg lg:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   R$ {totalSold.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Volume comercial</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block">Volume comercial</span>
               </div>
             </div>
 
             {/* Pendentes */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-3 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
+              <div className="mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate block">
                   Pendentes
                 </span>
               </div>
               <div>
-                <div className="text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   {countPending}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Aguardando envio/validação</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block truncate">Em validação</span>
               </div>
             </div>
 
             {/* Aprovados */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-3 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
+              <div className="mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate block">
                   Aprovados
                 </span>
               </div>
               <div>
-                <div className="text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   {countApproved}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Liberados para faturamento</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block truncate">Liberados</span>
               </div>
             </div>
 
             {/* Faturados */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-3 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
+              <div className="mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate block">
                   Faturados
                 </span>
               </div>
               <div>
-                <div className="text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   {countInvoiced}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Comissão e liquidez ativas</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block truncate">Liquidados</span>
               </div>
             </div>
 
             {/* Entregues */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-3 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
+              <div className="mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate block">
                   Entregues
                 </span>
               </div>
               <div>
-                <div className="text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   {countDelivered}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Logística finalizada</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block truncate">Finalizados</span>
               </div>
             </div>
 
             {/* Cancelados */}
-            <div className="p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
-              <div className="mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="p-3 sm:p-4.5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
+              <div className="mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate block">
                   Cancelados
                 </span>
               </div>
               <div>
-                <div className="text-xl font-extrabold font-mono text-slate-900 tracking-tight">
+                <div className="text-lg sm:text-xl font-extrabold font-mono text-slate-900 tracking-tight">
                   {countCancelled}
                 </div>
-                <span className="text-[11px] text-slate-400 mt-0.5 block">Recusados ou cancelados</span>
+                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 block truncate">Recusados</span>
               </div>
             </div>
           </div>
@@ -550,32 +550,35 @@ function OrdersPage() {
                   {orders.map((order) => {
                     const style = statusStyles[order.status as OrderStatus] || statusStyles.draft;
                     const clientName = order.client ? formatClientDisplayName(order.client) : 'Cliente sem identificação';
-                    const rawPhone = order.client?.whatsapp || order.client?.phone || '';
-                    const cleanPhone = rawPhone.replace(/\D/g, '');
 
                     return (
-                      <div key={order.id} className="p-4 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-3">
+                      <div key={order.id} className="p-3.5 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80">
+                              <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80">
                                 {order.order_number}
                               </span>
-                              <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                              <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
                                 {style.label}
                               </span>
                             </div>
                             <Link to="/comercial/pedidos/$id" params={{ id: order.id }}>
-                              <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors line-clamp-2">
+                              <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors line-clamp-1">
                                 {clientName}
                               </h4>
                             </Link>
+                            {order.created_at && (
+                              <span className="text-[11px] text-slate-400 block mt-0.5">
+                                {format(new Date(order.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              </span>
+                            )}
                           </div>
 
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-slate-400 hover:text-destructive shrink-0"
+                            size="icon"
+                            className="h-8 w-8 text-slate-400 hover:text-destructive shrink-0 -mr-1"
                             onClick={() => setOrderToDelete({ id: order.id, order_number: order.order_number })}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -585,9 +588,9 @@ function OrdersPage() {
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
                           <div>
                             <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                              Valor Total
+                              Total
                             </span>
-                            <span className="text-base font-extrabold font-mono text-slate-900">
+                            <span className="text-sm font-extrabold font-mono text-slate-900">
                               R$ {Number(order.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                           </div>
@@ -606,7 +609,7 @@ function OrdersPage() {
                               clientName={clientName}
                               variant="compact"
                             />
-                            <Button variant="outline" size="sm" className="h-8 text-xs font-semibold" asChild>
+                            <Button variant="outline" size="sm" className="h-7.5 px-2.5 text-xs font-semibold" asChild>
                               <Link to="/comercial/pedidos/$id" params={{ id: order.id }}>
                                 Detalhes
                               </Link>

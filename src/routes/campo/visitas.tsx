@@ -450,11 +450,11 @@ function VisitsPage() {
                 {/* Cards Verticais Mobile */}
                 <div className="md:hidden divide-y divide-slate-100">
                   {visits.map((visit) => (
-                    <div key={visit.id} className="p-4 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-3">
+                    <div key={visit.id} className="p-3.5 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">
                               {statusLabels[visit.status as keyof typeof statusLabels]}
                             </span>
                             <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
@@ -463,7 +463,7 @@ function VisitsPage() {
                             </span>
                           </div>
                           <Link to="/clientes/$id" params={{ id: visit.client_id }}>
-                            <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors">
+                            <h4 className="font-bold text-sm text-slate-900 leading-snug hover:text-primary transition-colors line-clamp-1">
                               {visit.client ? formatClientDisplayName(visit.client) : 'Cliente não informado'}
                             </h4>
                           </Link>
@@ -477,8 +477,8 @@ function VisitsPage() {
 
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-destructive shrink-0"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-destructive shrink-0 -mr-1"
                           onClick={() => {
                             setVisitToDelete(visit);
                             setIsDeleteDialogOpen(true);
@@ -509,7 +509,7 @@ function VisitsPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="h-8 text-xs font-semibold gap-1 shrink-0 ml-auto"
+                          className="h-7.5 px-2.5 text-xs font-semibold gap-1 shrink-0 ml-auto"
                           onClick={() => handleOpenNotebook(visit)}
                         >
                           <BookOpen className="h-3.5 w-3.5 text-primary" />

@@ -98,7 +98,7 @@ export function FloatingActionButton() {
 
       <div
         ref={containerRef}
-        className="fixed z-40 right-4 md:right-8 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-8 flex flex-col items-end gap-2.5 select-none"
+        className="fixed z-40 right-4 md:right-8 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-8 flex flex-col items-end gap-2.5 select-none"
       >
         {/* Menu de Ações Secundárias */}
         <div

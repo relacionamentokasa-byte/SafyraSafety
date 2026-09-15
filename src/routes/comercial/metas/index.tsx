@@ -266,25 +266,42 @@ function GoalsPage() {
                 const periodLabel = `${monthName}/${goal.year}`;
 
                 return (
-                  <div key={goal.id} className="p-4 rounded-lg border border-slate-100 bg-slate-50/30 space-y-2.5 hover:border-slate-200 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-slate-800 text-sm flex items-center gap-3">
-                        <RepresentativeBadge
-                          name={repName}
-                          photoUrl={goal.representative?.photo_url}
-                          size="sm"
-                        />
-                        <span className="text-xs text-slate-500 px-2 py-0.5 bg-slate-100 rounded font-medium">
-                          {periodLabel}
-                        </span>
+                  <div key={goal.id} className="p-3.5 sm:p-4 rounded-lg border border-slate-100 bg-slate-50/30 space-y-3 hover:border-slate-200 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <RepresentativeBadge
+                            name={repName}
+                            photoUrl={goal.representative?.photo_url}
+                            size="sm"
+                            nameClassName="truncate text-xs sm:text-sm font-semibold max-w-[130px] sm:max-w-none"
+                          />
+                          <span className="text-[11px] text-slate-500 px-1.5 py-0.5 bg-slate-100 rounded font-medium shrink-0">
+                            {periodLabel}
+                          </span>
+                        </div>
                         {goal.orders_count !== undefined && goal.orders_count > 0 && (
-                          <span className="text-[11px] text-slate-400 font-normal">
+                          <span className="text-[11px] text-slate-400 font-normal shrink-0 hidden sm:inline">
                             ({goal.orders_count} {goal.orders_count === 1 ? 'pedido' : 'pedidos'})
                           </span>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 sm:hidden text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                          title="Excluir meta"
+                          onClick={() => setGoalToDelete({
+                            id: goal.id,
+                            repName,
+                            period: periodLabel,
+                          })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-sm text-right">
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-200/50">
+                        <div className="text-xs sm:text-sm font-mono">
                           <span className="font-bold text-slate-900">{formatCurrency(Number(goal.achieved_value))}</span>
                           <span className="text-slate-400 mx-1">/</span>
                           <span className="text-slate-500">{formatCurrency(Number(goal.target_value))}</span>
@@ -292,7 +309,7 @@ function GoalsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          className="h-8 w-8 hidden sm:flex text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
                           title="Excluir meta"
                           onClick={() => setGoalToDelete({
                             id: goal.id,
@@ -305,10 +322,10 @@ function GoalsPage() {
                       </div>
                     </div>
                     <Progress value={goalPercent} className="h-2" />
-                    <div className="flex justify-between text-xs text-slate-500">
-                      <span className="font-mono">{goalPercent.toFixed(1)}% atingido</span>
+                    <div className="flex items-center justify-between text-[11px] sm:text-xs text-slate-500">
+                      <span className="font-mono font-semibold text-slate-700">{goalPercent.toFixed(1)}% atingido</span>
                       {remaining > 0 ? (
-                        <span>Faltam {formatCurrency(remaining)} para a meta</span>
+                        <span className="truncate">Faltam {formatCurrency(remaining)} para a meta</span>
                       ) : (
                         <span className="text-emerald-600 font-semibold">Meta batida!</span>
                       )}

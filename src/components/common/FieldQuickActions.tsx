@@ -47,14 +47,14 @@ export function FieldQuickActions({
 
   if (variant === 'buttons') {
     return (
-      <div className={cn("flex items-center gap-1.5 flex-wrap", className)}>
+      <div className={cn("flex items-center gap-1.5 flex-1 min-w-0", className)}>
         {/* WhatsApp Direto */}
         {whatsappUrl && (
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noreferrer"
-            className="h-8 px-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all hover:bg-emerald-100/70"
+            className="h-7.5 px-2.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all hover:bg-emerald-100/70 shrink-0"
             title="Abrir WhatsApp"
           >
             <MessageCircle className="h-3.5 w-3.5 fill-emerald-600/20 text-emerald-600" />
@@ -66,7 +66,7 @@ export function FieldQuickActions({
         {callUrl && (
           <a
             href={callUrl}
-            className="h-8 px-2.5 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all hover:bg-slate-100"
+            className="h-7.5 px-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all hover:bg-slate-100 shrink-0"
             title="Ligar para o cliente"
           >
             <Phone className="h-3.5 w-3.5 text-slate-600" />
@@ -81,7 +81,7 @@ export function FieldQuickActions({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 px-2.5 rounded-lg border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 active:scale-95"
+                className="h-7.5 px-2 rounded-lg border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 active:scale-95 shrink-0"
               >
                 <Navigation className="h-3.5 w-3.5 text-blue-600" />
                 <span>GPS / Rota</span>
