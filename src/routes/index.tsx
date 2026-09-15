@@ -129,14 +129,14 @@ function IndexPage() {
         </div>
 
         {/* Painel Direito: Formulário de Autenticação */}
-        <div className="flex-1 flex flex-col justify-between p-6 sm:p-12 xl:p-16 bg-white text-slate-900">
-          {/* Logo no Mobile */}
-          <div className="lg:hidden flex flex-col items-center justify-center pt-2 pb-6">
-            <SafyraLogo logoUrl={settings?.logo_url} size="md" />
-          </div>
+        <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 sm:p-12 xl:p-16 bg-white text-slate-900 min-h-screen">
+          <div className="w-full max-w-sm mx-auto my-auto flex flex-col justify-center">
+            {/* Logo no Mobile / Cabeçalho */}
+            <div className="lg:hidden flex flex-col items-center justify-center mb-8">
+              <SafyraLogo logoUrl={settings?.logo_url} size="md" imageClassName="h-32" />
+            </div>
 
-          <div className="w-full max-w-sm mx-auto my-auto py-6">
-            <div className="mb-8 space-y-1 text-center lg:text-left">
+            <div className="mb-6 space-y-1 text-center lg:text-left">
               <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                 Acesse sua conta
               </h2>
@@ -211,7 +211,7 @@ function IndexPage() {
             </div>
           </div>
 
-          <div className="lg:hidden text-center text-xs text-slate-400 py-4">
+          <div className="text-center text-xs text-slate-400 pt-8 mt-auto">
             <p>© {new Date().getFullYear()} Safyra Safety</p>
           </div>
         </div>
