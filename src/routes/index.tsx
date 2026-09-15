@@ -94,7 +94,7 @@ function IndexPage() {
             </div>
           </div>
 
-          {/* Meio: Mensagem Forte e Indústrias Parceiras */}
+          {/* Meio: Mensagem Forte */}
           <div className="relative z-10 max-w-xl space-y-6">
             <div className="space-y-3">
               <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-blue-400 font-mono">
@@ -106,18 +106,6 @@ function IndexPage() {
               <p className="text-sm xl:text-base text-slate-300 leading-relaxed max-w-lg font-normal">
                 Gestão comercial integrada, suporte consultivo a distribuidores e controle de operações de campo para Goiás e Centro-Oeste.
               </p>
-            </div>
-
-            {/* Badges das Representadas */}
-            <div className="flex items-center gap-3 pt-2">
-              <div className="px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold text-slate-100 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                Nutriex Profissional
-              </div>
-              <div className="px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold text-slate-100 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-                LIBUS do Brasil
-              </div>
             </div>
           </div>
 
