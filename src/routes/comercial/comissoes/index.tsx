@@ -454,12 +454,17 @@ function CommissionsPage() {
 
                     return (
                       <div key={c.id} className="p-4 space-y-3 bg-card hover:bg-slate-50/50 transition-colors">
-                        {/* Linha 1: Pedido + Fabricante + Status */}
+                        {/* Linha 1: Pedido + Parcela + Fabricante + Status */}
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800">
                               {order?.order_number ? `Ped #${order.order_number}` : 'Sem Ped.'}
                             </span>
+                            {c.order_payment?.installment_number && (
+                              <span className="text-[11px] font-medium font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                                {c.order_payment.installment_number}ª Parc.
+                              </span>
+                            )}
                             {c.manufacturer?.name && (
                               <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700">
                                 <ManufacturerLogo name={c.manufacturer.name} logoPath={c.manufacturer.logo_path} size="sm" />
@@ -558,9 +563,16 @@ function CommissionsPage() {
                         return (
                           <TableRow key={c.id} className="hover:bg-muted/30 transition-colors">
                             <TableCell className="font-semibold text-foreground">
-                              <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted">
-                                {order?.order_number || '-'}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted">
+                                  {order?.order_number || '-'}
+                                </span>
+                                {c.order_payment?.installment_number && (
+                                  <span className="text-[10px] font-medium font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                                    {c.order_payment.installment_number}ª Parc.
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="font-medium text-xs">
                               <RepresentativeBadge
