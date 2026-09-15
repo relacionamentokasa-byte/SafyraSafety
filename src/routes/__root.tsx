@@ -81,21 +81,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" },
+      { name: "theme-color", content: "#0F172A" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Safyra" },
       { title: "Safyra Safety - Gestão Comercial" },
       { name: "description", content: "Sistema inteligente para gestão de equipes de vendas e operações de campo." },
-      { name: "author", content: "Lovable" },
+      { name: "author", content: "Safyra Safety" },
       { property: "og:title", content: "Safyra Safety - Gestão Comercial" },
       { property: "og:description", content: "Sistema inteligente para gestão de equipes de vendas e operações de campo." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/pwa-192x192.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -127,6 +133,15 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((reg) => console.log("[PWA] Service worker registered:", reg.scope))
+        .catch((err) => console.warn("[PWA] Service worker registration failed:", err));
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
