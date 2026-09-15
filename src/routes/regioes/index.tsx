@@ -118,55 +118,55 @@ function RegionsPage() {
         </div>
 
         {/* KPIs Gerais de Cobertura */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-4 flex items-center justify-between">
+            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Faturamento Total</p>
-                <p className="text-2xl font-extrabold font-mono text-slate-900 mt-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Faturamento Total</p>
+                <p className="text-lg sm:text-2xl font-extrabold font-mono text-slate-900 mt-0.5 sm:mt-1 truncate">
                   R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-100 text-slate-700">
-                <MapPin className="h-5 w-5" />
+              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
+                <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-4 flex items-center justify-between">
+            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Municípios Atendidos</p>
-                <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalCitiesCovered}</p>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Municípios Atendidos</p>
+                <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-0.5 sm:mt-1 truncate">{totalCitiesCovered}</p>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-100 text-slate-700">
-                <Building2 className="h-5 w-5" />
+              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
+                <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-4 flex items-center justify-between">
+            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total de Clientes</p>
-                <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalClients}</p>
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Total de Clientes</p>
+                <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-0.5 sm:mt-1 truncate">{totalClients}</p>
               </div>
-              <div className="p-2.5 rounded-lg bg-slate-100 text-slate-700">
-                <Users className="h-5 w-5" />
+              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-4 flex items-center justify-between">
+            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Comissão Projetada</p>
-                <p className="text-2xl font-extrabold font-mono text-emerald-800 mt-1">
+                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Comissão Projetada</p>
+                <p className="text-lg sm:text-2xl font-extrabold font-mono text-emerald-800 mt-0.5 sm:mt-1 truncate">
                   R$ {(totalRevenue * 0.04).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-700">
-                <DollarSign className="h-5 w-5" />
+              <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-50 text-emerald-700 shrink-0">
+                <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </CardContent>
           </Card>
@@ -210,8 +210,155 @@ function RegionsPage() {
                 <span>Carregando dados territoriais...</span>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[700px]">
+              <>
+                {/* Visualização em Cards Verticais para Mobile */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredRegions.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-muted-foreground">
+                      Nenhuma região encontrada com os filtros aplicados.
+                    </div>
+                  ) : (
+                    filteredRegions.map((region) => {
+                      const isExpanded = !!expandedRegions[region.id];
+                      const sharePercent = totalRevenue > 0 ? ((region.totalRevenue / totalRevenue) * 100).toFixed(1) : '0.0';
+
+                      return (
+                        <div key={region.id} className="p-3.5 space-y-3 bg-white hover:bg-slate-50/50 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                {region.statesCovered.map((st) => (
+                                  <Badge key={st} variant="outline" className="font-bold text-[10px] px-1.5 py-0 bg-slate-50">
+                                    {st}
+                                  </Badge>
+                                ))}
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                  {region.citiesMetrics.length} cidades
+                                </span>
+                              </div>
+                              <h4 className="font-bold text-sm text-slate-900 leading-snug">
+                                {region.name}
+                              </h4>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                <span>{region.totalClients} clientes ({region.activeClients} ativos)</span>
+                                {region.warningClients.length > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-amber-600 font-medium">{region.warningClients.length} inativos</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0 -mr-1">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link to="/configuracoes/regioes" search={{ id: region.id }}>
+                                    <Edit className="mr-2 h-4 w-4" /> Editar Região
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => {
+                                    if (confirm('Tem certeza que deseja excluir esta região?')) {
+                                      deleteMutation.mutate(region.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-medium block">
+                                Faturamento ({sharePercent}% share)
+                              </span>
+                              <span className="text-sm font-extrabold font-mono text-primary">
+                                R$ {region.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7.5 px-2.5 text-xs font-semibold gap-1 shrink-0 ml-auto"
+                              onClick={() => toggleRegionExpand(region.id)}
+                            >
+                              {isExpanded ? (
+                                <>Ocultar Cidades <ChevronDown className="h-3.5 w-3.5" /></>
+                              ) : (
+                                <>Ver Cidades ({region.citiesMetrics.length}) <ChevronRight className="h-3.5 w-3.5" /></>
+                              )}
+                            </Button>
+                          </div>
+
+                          {/* Detalhamento de Cidades e Top Clientes no Mobile */}
+                          {isExpanded && (
+                            <div className="pt-3 border-t border-slate-200/80 space-y-3 bg-slate-50/50 -mx-3.5 -mb-3.5 p-3.5 rounded-b-lg">
+                              <div className="space-y-2">
+                                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                  Municípios Atendidos:
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {region.citiesMetrics.map((city, cIdx) => (
+                                    <div key={cIdx} className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs space-y-1">
+                                      <div className="flex justify-between items-start">
+                                        <span className="font-bold text-slate-800">{city.name}</span>
+                                        <span className="text-[10px] font-mono text-slate-500">
+                                          {city.totalClients} cli.
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-baseline pt-0.5">
+                                        <span className="text-[10px] text-slate-400">Total:</span>
+                                        <span className="font-bold font-mono text-primary text-xs">
+                                          R$ {city.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                      {city.topClient && (
+                                        <p className="text-[10px] text-slate-500 truncate pt-0.5 border-t border-slate-100">
+                                          Líder: <strong className="text-slate-700">{city.topClient.name}</strong>
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Top Clientes da Região */}
+                              {region.topClients.length > 0 && (
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs space-y-1.5">
+                                  <span className="font-bold text-slate-800 block text-[11px]">
+                                    Top Clientes:
+                                  </span>
+                                  {region.topClients.slice(0, 3).map((cl, cIdx) => (
+                                    <div key={cl.id} className="flex justify-between items-center py-0.5 border-b border-slate-100 last:border-0 text-[11px]">
+                                      <span className="truncate pr-2 text-slate-700">{cIdx + 1}º {cl.name}</span>
+                                      <span className="font-mono font-bold text-primary shrink-0">
+                                        R$ {cl.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Tabela Desktop */}
+                <div className="hidden md:block overflow-x-auto">
+                  <Table className="min-w-[700px]">
                   <TableHeader className="bg-slate-50/75">
                     <TableRow>
                       <TableHead className="w-12 text-center font-bold">#</TableHead>
@@ -410,7 +557,8 @@ function RegionsPage() {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
