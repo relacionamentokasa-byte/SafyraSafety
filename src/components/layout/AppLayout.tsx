@@ -70,9 +70,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] bg-background overflow-hidden">
+    <div className="flex h-[100dvh] min-h-[100dvh] w-full bg-background overflow-hidden relative">
       {/* Desktop Sidebar */}
-      <Sidebar className="hidden md:flex" />
+      <Sidebar className="hidden md:flex shrink-0" />
 
       {/* Mobile Sidebar Overlay */}
       {mobileMenuOpen && (
@@ -91,7 +91,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         onNavigate={() => setMobileMenuOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
         {/* Header */}
         <header className="flex items-center h-16 px-4 md:px-8 border-b border-slate-200/80 bg-white shrink-0 justify-between z-10">
           <div className="flex items-center gap-3">
@@ -150,8 +150,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 overscroll-y-contain -webkit-overflow-scrolling-touch pb-24 md:pb-8">
-          <div className="w-full mx-auto">{children}</div>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 overscroll-contain pb-32 md:pb-8 min-h-0 touch-pan-y">
+          <div className="w-full max-w-7xl mx-auto space-y-6">{children}</div>
         </main>
       </div>
 
