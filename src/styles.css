@@ -143,11 +143,15 @@
     border-color: var(--color-border);
   }
 
-  body {
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Alinhamento numérico perfeito em tabelas financeiras e valores monetários */
