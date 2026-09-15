@@ -48,19 +48,16 @@ function clearStaleSession(supabaseUrl: string) {
 
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
-  // Fall back to process.env for SSR (server-side rendering)
-  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'];
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
+  // Fall back to process.env for SSR (server-side rendering) with safe fallback defaults
+  const SUPABASE_URL =
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env['VITE_SUPABASE_URL'] || import.meta.env['SUPABASE_URL'] : undefined) ||
+    (typeof process !== 'undefined' && process.env ? process.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'] : undefined) ||
+    'https://hxogosqpcewvtwdyerru.supabase.co';
 
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY ? ['SUPABASE_PUBLISHABLE_KEY'] : []),
-    ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
-    console.error(`[Supabase] ${message}`);
-    throw new Error(message);
-  }
+  const SUPABASE_PUBLISHABLE_KEY =
+    (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || import.meta.env['SUPABASE_PUBLISHABLE_KEY'] || import.meta.env['VITE_SUPABASE_ANON_KEY'] : undefined) ||
+    (typeof process !== 'undefined' && process.env ? process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'] || process.env['VITE_SUPABASE_ANON_KEY'] || process.env['SUPABASE_ANON_KEY'] : undefined) ||
+    'sb_publishable_rYjSijG2jpE9_ys5EZIUJA_36mbvyi5';
 
   // Remove any session that belongs to a different Supabase project
   // so the browser doesn't reuse a stale token from a deleted project.
