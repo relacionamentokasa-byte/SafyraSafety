@@ -319,13 +319,13 @@ function CommissionsPage() {
 
         {/* Barra de Filtros Refinada */}
         <div className="rounded-xl border bg-card p-4 shadow-xs">
-          <div className="flex flex-col md:flex-row gap-3 items-end flex-wrap">
-            <div className="space-y-1.5 flex-1 min-w-[140px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div className="space-y-1.5 w-full">
               <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" /> Mês de Competência
               </Label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-9.5 text-xs font-medium">
+                <SelectTrigger className="h-9.5 text-xs font-medium w-full">
                   <SelectValue placeholder="Selecione o mês" />
                 </SelectTrigger>
                 <SelectContent>
@@ -339,10 +339,10 @@ function CommissionsPage() {
               </Select>
             </div>
 
-            <div className="space-y-1.5 flex-1 min-w-[100px]">
+            <div className="space-y-1.5 w-full">
               <Label className="text-xs font-semibold text-muted-foreground">Ano</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="h-9.5 text-xs font-medium">
+                <SelectTrigger className="h-9.5 text-xs font-medium w-full">
                   <SelectValue placeholder="Ano" />
                 </SelectTrigger>
                 <SelectContent>
@@ -356,10 +356,10 @@ function CommissionsPage() {
               </Select>
             </div>
 
-            <div className="space-y-1.5 flex-1 min-w-[170px]">
+            <div className="space-y-1.5 w-full">
               <Label className="text-xs font-semibold text-muted-foreground">Status do Repasse</Label>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9.5 text-xs font-medium">
+                <SelectTrigger className="h-9.5 text-xs font-medium w-full">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -372,10 +372,10 @@ function CommissionsPage() {
               </Select>
             </div>
 
-            <div className="space-y-1.5 flex-1 min-w-[170px]">
+            <div className="space-y-1.5 w-full">
               <Label className="text-xs font-semibold text-muted-foreground">Fabricante</Label>
               <Select value={manufacturerFilter} onValueChange={setManufacturerFilter}>
-                <SelectTrigger className="h-9.5 text-xs font-medium">
+                <SelectTrigger className="h-9.5 text-xs font-medium w-full">
                   <SelectValue placeholder="Fabricante" />
                 </SelectTrigger>
                 <SelectContent>
@@ -392,19 +392,21 @@ function CommissionsPage() {
               </Select>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9.5 px-3.5 text-xs font-semibold"
-              onClick={() => {
-                setSelectedMonth(String(currentDate.getMonth() + 1));
-                setSelectedYear(String(currentDate.getFullYear()));
-                setStatusFilter('all');
-                setManufacturerFilter('all');
-              }}
-            >
-              Mês Atual / Limpar
-            </Button>
+            <div className="w-full sm:col-span-2 lg:col-span-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9.5 w-full text-xs font-semibold"
+                onClick={() => {
+                  setSelectedMonth(String(currentDate.getMonth() + 1));
+                  setSelectedYear(String(currentDate.getFullYear()));
+                  setStatusFilter('all');
+                  setManufacturerFilter('all');
+                }}
+              >
+                Mês Atual / Limpar
+              </Button>
+            </div>
           </div>
         </div>
 
