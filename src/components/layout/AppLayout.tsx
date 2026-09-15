@@ -150,8 +150,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 overscroll-y-contain -webkit-overflow-scrolling-touch pb-24 md:pb-8">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 overscroll-y-contain -webkit-overflow-scrolling-touch pb-24 md:pb-8">
+          <div className="w-full mx-auto">{children}</div>
         </main>
       </div>
 

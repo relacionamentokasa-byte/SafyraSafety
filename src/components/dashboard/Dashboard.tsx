@@ -48,7 +48,7 @@ export function Dashboard() {
   const { commissionForecast } = stats;
 
   return (
-    <div className="space-y-6 pb-8 max-w-7xl mx-auto">
+    <div className="space-y-6 pb-8 w-full">
       {/* Topo do Dashboard */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
         <div>

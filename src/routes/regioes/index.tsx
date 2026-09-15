@@ -99,7 +99,7 @@ function RegionsPage() {
 
   return (
     <AppLayout>
-      <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-8 space-y-6 w-full mx-auto">
         {/* Cabeçalho */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
           <div>

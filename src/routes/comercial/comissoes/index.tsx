@@ -222,7 +222,7 @@ function CommissionsPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 w-full mx-auto">
         {/* Header com Identidade Safyra */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
           <div>
