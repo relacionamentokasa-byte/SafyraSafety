@@ -4,15 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
-import {
-  Loader2,
-  ShieldCheck,
-  MapPin,
-  TrendingUp,
-  Boxes,
-  Lock,
-  Sparkles,
-} from "lucide-react";
+import { Loader2, ShieldCheck, Lock } from "lucide-react";
 import { SafyraLogo } from "@/components/common/SafyraLogo";
 
 export const Route = createFileRoute("/")({
@@ -21,8 +13,7 @@ export const Route = createFileRoute("/")({
       { title: "Safyra Safety | Acesso ao Sistema" },
       {
         name: "description",
-        content:
-          "Plataforma integrada de gestão comercial, roteirização e inteligência de vendas para representantes de EPI e proteção industrial.",
+        content: "Sistema de gestão comercial e operações de campo Safyra Safety.",
       },
     ],
   }),
@@ -68,122 +59,74 @@ function IndexPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-slate-950 text-white gap-4">
-        <Loader2 className="h-9 w-9 animate-spin text-amber-500" />
-        <div className="text-center">
-          <p className="text-base font-semibold tracking-wide">Safyra Safety</p>
-          <p className="text-xs text-slate-400 mt-0.5">Carregando ambiente seguro...</p>
-        </div>
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <p className="text-sm font-medium text-slate-400">Iniciando sistema...</p>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="min-h-screen w-full flex flex-col lg:flex-row bg-slate-50 text-slate-900 font-sans">
-        {/* Painel Esquerdo: Identidade Institucional (Desktop) */}
-        <div className="relative hidden lg:flex lg:w-1/2 bg-[#0B132B] text-white flex-col justify-between p-12 xl:p-16 overflow-hidden">
-          {/* Elementos visuais de fundo sutis */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-
-          {/* Topo: Logo & Selo */}
-          <div className="relative z-10">
-            <div className="flex items-center gap-3">
-              <SafyraLogo logoUrl={settings?.logo_url} size="md" className="brightness-110" />
-            </div>
+      <div className="min-h-screen w-full flex flex-col lg:flex-row bg-slate-50 text-slate-900">
+        {/* Painel Institucional Corporativo (Esquerda) */}
+        <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-between p-16">
+          <div>
+            <SafyraLogo logoUrl={settings?.logo_url} size="md" />
           </div>
 
-          {/* Centro: Mensagem de Posicionamento e Pilares */}
-          <div className="relative z-10 my-auto py-8 space-y-8 max-w-lg">
+          <div className="space-y-6 max-w-lg my-auto">
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/10 text-xs font-medium text-amber-400">
-                <Sparkles className="h-3.5 w-3.5" />
-                Gestão Comercial & Operação de Campo
-              </div>
-              <h1 className="text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
-                Controle estratégico de clientes, pedidos e representantes
+              <h1 className="text-3xl font-bold tracking-tight text-white leading-tight">
+                Gestão Comercial e Operações de Campo
               </h1>
-              <p className="text-sm xl:text-base text-slate-300/90 leading-relaxed">
-                Plataforma corporativa desenhada para acelerar vendas técnicas de EPIs, proteção industrial e operações em campo.
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Plataforma integrada para controle de carteira de clientes, tabelas de preços, pedidos e apuração de comissões.
               </p>
             </div>
 
-            {/* Destaques Rápidos */}
-            <div className="grid grid-cols-1 gap-3 pt-2">
-              <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm">
-                <div className="h-9 w-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <Boxes className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Catálogos Oficiais & Tabelas
-                  </h3>
-                  <p className="text-xs text-slate-300 mt-0.5 leading-normal">
-                    Linhas técnicas completas <strong>Nutriex Profissional</strong> e <strong>LIBUS do Brasil</strong>.
-                  </p>
-                </div>
+            <div className="border-t border-slate-800 pt-6 space-y-4">
+              <div className="flex justify-between items-center text-xs text-slate-400 py-1">
+                <span>Representadas Oficiais</span>
+                <span className="font-semibold text-slate-200">Nutriex Profissional & LIBUS do Brasil</span>
               </div>
-
-              <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm">
-                <div className="h-9 w-9 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <MapPin className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Roteirização & Inteligência de Campo
-                  </h3>
-                  <p className="text-xs text-slate-300 mt-0.5 leading-normal">
-                    Check-in de visitas, rotas geolocalizadas e histórico consolidado por cliente.
-                  </p>
-                </div>
+              <div className="flex justify-between items-center text-xs text-slate-400 py-1 border-t border-slate-800/60">
+                <span>Ambiente de Operação</span>
+                <span className="font-semibold text-slate-200">Goiás & Centro-Oeste</span>
               </div>
-
-              <div className="flex items-start gap-3.5 p-3.5 rounded-xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm">
-                <div className="h-9 w-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <TrendingUp className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Metas & Cálculo de Comissões
-                  </h3>
-                  <p className="text-xs text-slate-300 mt-0.5 leading-normal">
-                    Painel em tempo real de faturamento, metas atingidas e previsão de repasses.
-                  </p>
-                </div>
+              <div className="flex justify-between items-center text-xs text-slate-400 py-1 border-t border-slate-800/60">
+                <span>Controle de Acesso</span>
+                <span className="font-semibold text-slate-200">Restrito a Usuários Autorizados</span>
               </div>
             </div>
           </div>
 
-          {/* Rodapé do Painel Esquerdo */}
-          <div className="relative z-10 flex items-center justify-between pt-6 border-t border-white/10 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-6 border-t border-slate-800">
+            <span className="flex items-center gap-1.5 text-slate-400">
               <ShieldCheck className="h-4 w-4" />
-              Ambiente Seguro • Criptografia SSL
+              Conexão Segura
             </span>
             <span>© {new Date().getFullYear()} Safyra Safety</span>
           </div>
         </div>
 
-        {/* Painel Direito: Formulário de Autenticação */}
-        <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 lg:p-16 xl:p-24 bg-slate-50">
-          {/* Logo Mobile (visível apenas em telas menores) */}
+        {/* Formulário de Acesso (Direita) */}
+        <div className="flex-1 flex flex-col justify-between p-6 sm:p-12 lg:p-16 bg-slate-50">
           <div className="lg:hidden flex items-center justify-center pt-4 pb-6">
             <SafyraLogo logoUrl={settings?.logo_url} size="md" />
           </div>
 
-          <div className="w-full max-w-md mx-auto my-auto py-6">
-            <div className="text-center lg:text-left mb-8 space-y-2">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-                Acesse sua conta
+          <div className="w-full max-w-sm mx-auto my-auto py-6">
+            <div className="mb-8 space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                Entrar no Sistema
               </h2>
-              <p className="text-sm text-slate-600">
-                Digite suas credenciais corporativas para entrar na plataforma.
+              <p className="text-xs text-slate-500">
+                Informe seu e-mail e senha para acessar sua conta.
               </p>
             </div>
 
-            {/* Container do Form com Card Elevation Sofisticado */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/50 p-6 sm:p-8 space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-7 shadow-sm">
               <Auth
                 supabaseClient={supabase}
                 appearance={{
@@ -200,33 +143,33 @@ function IndexPage() {
                         inputBorderHover: "#CBD5E1",
                       },
                       radii: {
-                        borderRadiusButton: "0.5rem",
-                        buttonBorderRadius: "0.5rem",
-                        inputBorderRadius: "0.5rem",
+                        borderRadiusButton: "0.375rem",
+                        buttonBorderRadius: "0.375rem",
+                        inputBorderRadius: "0.375rem",
                       },
                       fontSizes: {
-                        baseBodySize: "14px",
-                        baseInputSize: "14px",
-                        baseLabelSize: "13px",
-                        baseButtonSize: "14px",
+                        baseBodySize: "13px",
+                        baseInputSize: "13px",
+                        baseLabelSize: "12px",
+                        baseButtonSize: "13px",
                       },
                     },
                   },
                   className: {
-                    button: "!font-semibold !h-11 !transition-all !duration-150 !shadow-sm hover:!opacity-95",
-                    input: "!h-11 !border-slate-300 !text-slate-900 focus:!ring-2 focus:!ring-slate-900/10",
-                    label: "!font-medium !text-slate-700 !mb-1.5",
+                    button: "!font-semibold !h-10 !shadow-none !bg-slate-900 hover:!bg-slate-800",
+                    input: "!h-10 !border-slate-300 !text-slate-900 focus:!ring-1 focus:!ring-slate-900 focus:!border-slate-900",
+                    label: "!font-medium !text-slate-700 !mb-1",
                   },
                 }}
                 localization={{
                   variables: {
                     sign_in: {
-                      email_label: "E-mail corporativo",
-                      password_label: "Senha de acesso",
-                      button_label: "Entrar na Plataforma",
-                      loading_button_label: "Autenticando credenciais...",
-                      email_input_placeholder: "ex: seu-nome@safyrasafety.com.br",
-                      password_input_placeholder: "Digite sua senha",
+                      email_label: "E-mail",
+                      password_label: "Senha",
+                      button_label: "Entrar",
+                      loading_button_label: "Acessando...",
+                      email_input_placeholder: "nome@safyrasafety.com.br",
+                      password_input_placeholder: "••••••••",
                     },
                   },
                 }}
@@ -241,18 +184,16 @@ function IndexPage() {
               />
             </div>
 
-            {/* Informação de Apoio / Suporte */}
-            <div className="mt-8 text-center text-xs text-slate-500 space-y-2">
-              <p className="flex items-center justify-center gap-1.5 text-slate-500">
-                <Lock className="h-3.5 w-3.5 text-slate-400" />
-                Acesso restrito a colaboradores e representantes autorizados.
+            <div className="mt-6 text-center">
+              <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+                <Lock className="h-3.5 w-3.5" />
+                Acesso corporativo seguro
               </p>
             </div>
           </div>
 
-          {/* Rodapé Mobile */}
-          <div className="lg:hidden text-center text-xs text-slate-400 py-4 border-t border-slate-200">
-            <p>© {new Date().getFullYear()} Safyra Safety • Todos os direitos reservados</p>
+          <div className="lg:hidden text-center text-xs text-slate-400 py-4">
+            <p>© {new Date().getFullYear()} Safyra Safety</p>
           </div>
         </div>
       </div>
@@ -261,5 +202,6 @@ function IndexPage() {
 
   return <Navigate to="/dashboard" />;
 }
+
 
 
