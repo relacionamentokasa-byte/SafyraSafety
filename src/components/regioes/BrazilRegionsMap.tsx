@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { MapPin, TrendingUp, Building2, AlertTriangle } from 'lucide-react';
 import brazilStatesData from './brazilStatesData.json';
 import { StateFlag } from './StateFlag';
+import { formatDisplayName, formatClientDisplayName } from '@/lib/format-name';
 
 interface BrazilRegionsMapProps {
   statesMetrics: Record<string, StateMapMetric>;
@@ -200,65 +201,65 @@ export function BrazilRegionsMap({ statesMetrics, selectedUf, onSelectUf, classN
             };
 
             return (
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-                <div className="flex items-start justify-between border-b pb-3">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <StateFlag uf={stateInfo.uf} name={stateInfo.name} className="h-6 w-9 rounded shadow-xs" />
-                      <h4 className="font-bold text-lg text-slate-800">{stateInfo.name}</h4>
+              <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <StateFlag uf={stateInfo.uf} name={stateInfo.name} className="h-5 w-7 rounded shadow-2xs" />
+                    <div>
+                      <h4 className="font-bold text-sm sm:text-base text-slate-800 leading-tight">{stateInfo.name}</h4>
+                      <p className="text-[10px] text-slate-400">
+                        {stateInfo.citiesCount} {stateInfo.citiesCount === 1 ? 'município' : 'municípios'} atendidos
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {stateInfo.citiesCount} {stateInfo.citiesCount === 1 ? 'município na base' : 'municípios na base'}
-                    </p>
                   </div>
-                  <Badge variant={stateInfo.totalRevenue > 0 ? "default" : "outline"} className="text-xs font-semibold">
-                    {stateInfo.totalRevenue > 0 ? 'Polo Ativo' : 'Sem Faturamento'}
+                  <Badge variant={stateInfo.totalRevenue > 0 ? "default" : "outline"} className="text-[10px] font-semibold h-5 px-2">
+                    {stateInfo.totalRevenue > 0 ? 'Polo Ativo' : 'Sem Vendas'}
                   </Badge>
                 </div>
 
-                {/* Métricas Principais do Estado */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 rounded-lg bg-slate-50 border">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">Faturamento Real</span>
-                    <span className="font-bold font-mono text-base text-primary">
+                {/* Métricas Principais do Estado Compactas */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Faturamento Real</span>
+                    <span className="font-bold font-mono text-xs sm:text-sm text-primary block truncate">
                       R$ {stateInfo.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">Pedidos Faturados</span>
-                    <span className="font-bold text-base text-slate-800">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Pedidos Faturados</span>
+                    <span className="font-bold font-mono text-xs sm:text-sm text-slate-800 block truncate">
                       {stateInfo.ordersCount} pedidos
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground block">Clientes Cadastrados</span>
-                    <span className="font-bold text-base text-slate-800">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block truncate">Clientes</span>
+                    <span className="font-bold font-mono text-xs sm:text-sm text-slate-800 block truncate">
                       {stateInfo.totalClients} ({stateInfo.activeClients} ativos)
                     </span>
                   </div>
-                  <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-200">
-                    <span className="text-[10px] uppercase font-bold text-emerald-700 block">Comissão Estimada</span>
-                    <span className="font-bold font-mono text-base text-emerald-800">
+                  <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200">
+                    <span className="text-[9px] uppercase font-bold text-emerald-700 block truncate">Comissão Est.</span>
+                    <span className="font-bold font-mono text-xs sm:text-sm text-emerald-800 block truncate">
                       R$ {(stateInfo.totalRevenue * 0.04).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
 
                 {/* Seção com Cidades, Top Clientes e Alertas em 3 colunas */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 border-t border-slate-100">
                   {/* Top Cidades do Estado */}
-                  <div className="p-3 rounded-lg bg-slate-50/70 border space-y-2">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <div className="p-2.5 rounded-lg bg-slate-50/70 border border-slate-100 space-y-1.5">
+                    <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
                       <Building2 className="h-3.5 w-3.5 text-primary" /> Principais Cidades ({stateInfo.uf}):
                     </span>
                     {stateInfo.cities.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">Nenhuma cidade registrada</p>
+                      <p className="text-[11px] text-muted-foreground italic py-1">Nenhuma cidade registrada</p>
                     ) : (
-                      <div className="max-h-[160px] overflow-y-auto space-y-1.5 pr-1 text-xs">
-                        {stateInfo.cities.slice(0, 6).map((city, cIdx) => (
-                          <div key={cIdx} className="flex justify-between items-center p-1.5 rounded-md bg-white border border-slate-100">
-                            <span className="font-medium text-slate-700">{city.name}</span>
-                            <span className="font-mono font-semibold text-primary">
+                      <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1 text-xs">
+                        {stateInfo.cities.slice(0, 5).map((city, cIdx) => (
+                          <div key={cIdx} className="flex justify-between items-center p-1.5 rounded bg-white border border-slate-100 shadow-2xs text-[11px]">
+                            <span className="font-medium text-slate-800 truncate">{formatDisplayName(city.name)}</span>
+                            <span className="font-mono font-semibold text-primary shrink-0 ml-2">
                               R$ {city.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                           </div>
@@ -268,50 +269,79 @@ export function BrazilRegionsMap({ statesMetrics, selectedUf, onSelectUf, classN
                   </div>
 
                   {/* Top Clientes do Estado */}
-                  <div className="p-3 rounded-lg bg-slate-50/70 border space-y-2">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <div className="p-2.5 rounded-lg bg-slate-50/70 border border-slate-100 space-y-1.5">
+                    <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
                       <TrendingUp className="h-3.5 w-3.5 text-amber-500" /> Top Clientes ({stateInfo.uf}):
                     </span>
                     {stateInfo.topClients.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">Nenhum cliente com compras</p>
+                      <p className="text-[11px] text-muted-foreground italic py-1">Nenhum cliente com compras</p>
                     ) : (
-                      <div className="max-h-[160px] overflow-y-auto space-y-1.5 pr-1 text-xs">
-                        {stateInfo.topClients.slice(0, 4).map((cl, idx) => (
-                          <div key={cl.id} className="flex justify-between items-center p-1.5 rounded-md bg-white border border-slate-100 text-[11px]">
-                            <span className="font-medium text-slate-800 truncate max-w-[150px]" title={cl.name}>
-                              {idx + 1}º {cl.name}
-                            </span>
-                            <span className="font-bold font-mono text-primary">
-                              R$ {cl.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1 text-xs">
+                        {stateInfo.topClients.slice(0, 3).map((cl, idx) => {
+                          const displayName = formatClientDisplayName({
+                            trade_name: cl.tradeName,
+                            name: cl.name,
+                          }) || cl.name;
+                          const location = cl.city ? `${formatDisplayName(cl.city)} - ${cl.state || stateInfo.uf}` : (cl.state || stateInfo.uf);
+
+                          return (
+                            <div key={cl.id} className="flex justify-between items-center p-1.5 rounded bg-white border border-slate-100 shadow-2xs gap-1.5 text-[11px]">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-slate-900 truncate text-[11px]" title={displayName}>
+                                  <span className="text-slate-400 font-mono mr-1">{idx + 1}º</span>
+                                  {displayName}
+                                </div>
+                                <div className="text-[9px] text-slate-400 truncate">
+                                  {location}
+                                </div>
+                              </div>
+                              <span className="font-bold font-mono text-primary text-[10px] shrink-0">
+                                R$ {cl.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
 
                   {/* Clientes Sem Compra Recente */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
-                        Clientes sem compra (+60d):
+                      <span className="text-[11px] font-bold text-slate-800">
+                        Sem compra (+60d):
                       </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {stateInfo.warningClients.length} listados
+                      <span className="text-[9px] text-slate-500 font-mono">
+                        {stateInfo.warningClients.length}
                       </span>
                     </div>
                     {stateInfo.warningClients.length === 0 ? (
-                      <p className="text-xs text-slate-500 italic py-2">Nenhum cliente inativo no estado.</p>
+                      <p className="text-[11px] text-slate-500 italic py-1">Nenhum cliente inativo.</p>
                     ) : (
-                      <div className="max-h-[160px] overflow-y-auto space-y-1.5 pr-1 text-xs">
-                        {stateInfo.warningClients.slice(0, 4).map((cl) => (
-                          <div key={cl.id} className="flex justify-between items-center p-2 rounded-lg bg-white border border-slate-200 text-slate-700 shadow-2xs">
-                            <span className="truncate max-w-[150px] font-medium text-slate-900" title={cl.name}>{cl.name}</span>
-                            <span className="text-slate-500 text-[11px] font-mono whitespace-nowrap">
-                              {cl.daysSinceLastOrder ? `${cl.daysSinceLastOrder} dias` : 'Sem compras'}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1 text-xs">
+                        {stateInfo.warningClients.slice(0, 3).map((cl) => {
+                          const displayName = formatClientDisplayName({
+                            trade_name: cl.tradeName,
+                            name: cl.name,
+                          }) || cl.name;
+                          const location = cl.city ? `${formatDisplayName(cl.city)} - ${cl.state || stateInfo.uf}` : (cl.state || stateInfo.uf);
+
+                          return (
+                            <div key={cl.id} className="flex justify-between items-center p-1.5 rounded bg-white border border-slate-200 text-slate-700 shadow-2xs gap-1.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-slate-900 truncate text-[11px]" title={displayName}>
+                                  {displayName}
+                                </div>
+                                <div className="text-[9px] text-slate-400 truncate">
+                                  {location}
+                                </div>
+                              </div>
+                              <span className="text-slate-500 text-[9px] font-mono whitespace-nowrap shrink-0">
+                                {cl.daysSinceLastOrder ? `${cl.daysSinceLastOrder}d` : 'S/ compras'}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

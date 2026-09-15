@@ -208,23 +208,23 @@ function RegionsPage() {
         />
 
         {/* DETALHAMENTO DAS MACRORREGIÕES COM CIDADES & CLIENTES */}
-        <Card className="shadow-sm border-slate-200">
-          <CardHeader className="pb-3 border-b bg-slate-50/50">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <Card className="shadow-xs border-slate-200">
+          <CardHeader className="py-3 px-4 sm:px-5 border-b bg-slate-50/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div>
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" /> Polos Comerciais & Detalhamento de Cidades
+                <CardTitle className="text-sm sm:text-base font-bold flex items-center gap-2 text-slate-900">
+                  <MapPin className="h-4 w-4 text-primary" /> Polos Comerciais & Detalhamento
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Abra cada região para ver as cidades atendidas, faturamento gerado, top clientes e alertas de inatividade.
+                <CardDescription className="text-xs text-slate-500">
+                  Resumo das macrorregiões com cidades e clientes atendidos.
                 </CardDescription>
               </div>
 
-              <div className="relative w-full md:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                 <Input
-                  placeholder="Filtrar região, estado ou cidade..."
-                  className="pl-9 h-8 text-xs bg-white"
+                  placeholder="Filtrar região, UF ou cidade..."
+                  className="pl-8 h-8 text-xs bg-white"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -233,16 +233,16 @@ function RegionsPage() {
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-12 flex justify-center items-center gap-2 text-muted-foreground text-xs">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <div className="p-8 flex justify-center items-center gap-2 text-slate-500 text-xs">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 <span>Carregando dados territoriais...</span>
               </div>
             ) : (
               <>
-                {/* Visualização em Cards Verticais para Mobile */}
+                {/* Visualização em Cards Compactos para Mobile */}
                 <div className="md:hidden divide-y divide-slate-100">
                   {filteredRegions.length === 0 ? (
-                    <div className="p-8 text-center text-xs text-muted-foreground">
+                    <div className="p-6 text-center text-xs text-slate-500">
                       Nenhuma região encontrada com os filtros aplicados.
                     </div>
                   ) : (
@@ -251,23 +251,23 @@ function RegionsPage() {
                       const sharePercent = totalRevenue > 0 ? ((region.totalRevenue / totalRevenue) * 100).toFixed(1) : '0.0';
 
                       return (
-                        <div key={region.id} className="p-3.5 space-y-3 bg-white hover:bg-slate-50/50 transition-colors">
+                        <div key={region.id} className="p-3 space-y-2 bg-white hover:bg-slate-50/50 transition-colors">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                                 {region.statesCovered.map((st) => (
-                                  <Badge key={st} variant="outline" className="font-bold text-[10px] px-1.5 py-0 bg-slate-50">
+                                  <Badge key={st} variant="outline" className="font-bold text-[9px] px-1 py-0 bg-slate-50 h-4">
                                     {st}
                                   </Badge>
                                 ))}
-                                <span className="text-[11px] font-semibold text-slate-500">
+                                <span className="text-[10px] font-semibold text-slate-500">
                                   {region.citiesMetrics.length} cidades
                                 </span>
                               </div>
-                              <h4 className="font-bold text-sm text-slate-900 leading-snug">
+                              <h4 className="font-bold text-xs sm:text-sm text-slate-900 leading-tight truncate">
                                 {region.name}
                               </h4>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
                                 <span>{region.totalClients} clientes ({region.activeClients} ativos)</span>
                                 {region.warningClients.length > 0 && (
                                   <>
@@ -280,8 +280,8 @@ function RegionsPage() {
 
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 shrink-0 -mr-1">
-                                  <MoreVertical className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 shrink-0">
+                                  <MoreVertical className="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
@@ -304,54 +304,54 @@ function RegionsPage() {
                             </DropdownMenu>
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
-                            <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-medium block">
-                                Faturamento ({sharePercent}% share)
-                              </span>
-                              <span className="text-sm font-extrabold font-mono text-primary">
+                          <div className="flex items-center justify-between pt-1.5 border-t border-slate-100 gap-2">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xs font-extrabold font-mono text-primary">
                                 R$ {region.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                ({sharePercent}%)
                               </span>
                             </div>
 
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
-                              className="h-7.5 px-2.5 text-xs font-semibold gap-1 shrink-0 ml-auto"
+                              className="h-6 px-2 text-[11px] font-semibold gap-1 text-slate-600 hover:text-slate-900 shrink-0"
                               onClick={() => toggleRegionExpand(region.id)}
                             >
                               {isExpanded ? (
-                                <>Ocultar Cidades <ChevronDown className="h-3.5 w-3.5" /></>
+                                <>Ocultar <ChevronDown className="h-3 w-3" /></>
                               ) : (
-                                <>Ver Cidades ({region.citiesMetrics.length}) <ChevronRight className="h-3.5 w-3.5" /></>
+                                <>Ver Cidades ({region.citiesMetrics.length}) <ChevronRight className="h-3 w-3" /></>
                               )}
                             </Button>
                           </div>
 
                           {/* Detalhamento de Cidades e Top Clientes no Mobile */}
                           {isExpanded && (
-                            <div className="pt-3 border-t border-slate-200/80 space-y-3 bg-slate-50/50 -mx-3.5 -mb-3.5 p-3.5 rounded-b-lg">
-                              <div className="space-y-2">
-                                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                            <div className="pt-2.5 border-t border-slate-100 space-y-2.5 bg-slate-50/60 -mx-3 -mb-3 p-3 rounded-b-lg">
+                              <div className="space-y-1.5">
+                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
                                   Municípios Atendidos:
                                 </span>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                                   {region.citiesMetrics.map((city, cIdx) => (
-                                    <div key={cIdx} className="p-2.5 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs space-y-1">
+                                    <div key={cIdx} className="p-2 rounded-md bg-white border border-slate-200 shadow-2xs text-[11px] space-y-0.5">
                                       <div className="flex justify-between items-start">
-                                        <span className="font-bold text-slate-800">{city.name}</span>
-                                        <span className="text-[10px] font-mono text-slate-500">
+                                        <span className="font-semibold text-slate-800 truncate">{city.name}</span>
+                                        <span className="text-[10px] font-mono text-slate-400 shrink-0 ml-1">
                                           {city.totalClients} cli.
                                         </span>
                                       </div>
-                                      <div className="flex justify-between items-baseline pt-0.5">
-                                        <span className="text-[10px] text-slate-400">Total:</span>
-                                        <span className="font-bold font-mono text-primary text-xs">
+                                      <div className="flex justify-between items-baseline">
+                                        <span className="text-[9px] text-slate-400">Total:</span>
+                                        <span className="font-bold font-mono text-primary text-[11px]">
                                           R$ {city.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </span>
                                       </div>
                                       {city.topClient && (
-                                        <p className="text-[10px] text-slate-500 truncate pt-0.5 border-t border-slate-100">
+                                        <p className="text-[9px] text-slate-500 truncate pt-0.5 border-t border-slate-100">
                                           Líder: <strong className="text-slate-700">{city.topClient.name}</strong>
                                         </p>
                                       )}
@@ -362,12 +362,12 @@ function RegionsPage() {
 
                               {/* Top Clientes da Região */}
                               {region.topClients.length > 0 && (
-                                <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-xs space-y-1.5">
-                                  <span className="font-bold text-slate-800 block text-[11px]">
+                                <div className="p-2 bg-white rounded-md border border-slate-200 text-xs space-y-1">
+                                  <span className="font-bold text-slate-800 block text-[10px]">
                                     Top Clientes:
                                   </span>
                                   {region.topClients.slice(0, 3).map((cl, cIdx) => (
-                                    <div key={cl.id} className="flex justify-between items-center py-0.5 border-b border-slate-100 last:border-0 text-[11px]">
+                                    <div key={cl.id} className="flex justify-between items-center py-0.5 border-b border-slate-100 last:border-0 text-[10px]">
                                       <span className="truncate pr-2 text-slate-700">{cIdx + 1}º {cl.name}</span>
                                       <span className="font-mono font-bold text-primary shrink-0">
                                         R$ {cl.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
