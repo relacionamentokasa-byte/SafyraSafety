@@ -46,7 +46,7 @@ export function BottomNav({ onOpenMenu }: BottomNavProps) {
   return (
     <nav
       aria-label="Navegação mobile rápida"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 py-1.5 flex items-center justify-around select-none"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-sidebar/95 backdrop-blur-md border-t border-sidebar-border shadow-[0_-4px_25px_rgba(0,0,0,0.25)] px-2 py-1.5 flex items-center justify-around select-none"
       style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     >
       {navItems.map((item) => {
@@ -58,19 +58,21 @@ export function BottomNav({ onOpenMenu }: BottomNavProps) {
             className={cn(
               "flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl transition-all duration-150 active:scale-95",
               item.isActive
-                ? "text-slate-950 font-bold"
-                : "text-slate-500 hover:text-slate-900 font-medium"
+                ? "text-white font-bold"
+                : "text-slate-400 hover:text-slate-200 font-medium"
             )}
           >
             <div
               className={cn(
-                "p-1 rounded-lg transition-colors",
-                item.isActive ? "bg-slate-100 text-slate-900" : "bg-transparent text-slate-500"
+                "p-1.5 rounded-lg transition-colors",
+                item.isActive ? "bg-slate-800 text-white shadow-xs border border-slate-700/60" : "bg-transparent text-slate-400"
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
             </div>
-            <span className="text-[11px] mt-0.5 tracking-tight">{item.label}</span>
+            <span className={cn("text-[11px] mt-0.5 tracking-tight", item.isActive ? "text-white font-semibold" : "text-slate-400")}>
+              {item.label}
+            </span>
           </Link>
         );
       })}
@@ -79,12 +81,12 @@ export function BottomNav({ onOpenMenu }: BottomNavProps) {
       <button
         type="button"
         onClick={onOpenMenu}
-        className="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl text-slate-500 hover:text-slate-900 font-medium transition-all duration-150 active:scale-95"
+        className="flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 active:scale-95"
       >
-        <div className="p-1 rounded-lg bg-transparent text-slate-500">
+        <div className="p-1.5 rounded-lg bg-transparent text-slate-400">
           <Menu className="h-5 w-5 shrink-0" />
         </div>
-        <span className="text-[11px] mt-0.5 tracking-tight">Mais</span>
+        <span className="text-[11px] mt-0.5 tracking-tight text-slate-400">Mais</span>
       </button>
     </nav>
   );
