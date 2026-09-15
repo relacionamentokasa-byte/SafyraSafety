@@ -16,5 +16,6 @@ export default defineConfig({
   },
   nitro: {
     preset: "vercel",
+    inlineDynamicImports: true,
   },
 });
