@@ -21,8 +21,20 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(`sb-hxogosqpcewvtwdyerru-auth-token`);
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const { data: settings } = useQuery({
