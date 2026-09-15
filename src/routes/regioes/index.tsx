@@ -117,59 +117,87 @@ function RegionsPage() {
           </div>
         </div>
 
-        {/* KPIs Gerais de Cobertura */}
+        {/* KPIs Gerais de Cobertura (Hero Mobile + Grid 2x2) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Faturamento Total</p>
-                <p className="text-lg sm:text-2xl font-extrabold font-mono text-slate-900 mt-0.5 sm:mt-1 truncate">
-                  R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
+          {/* Faturamento Total (Hero em tela cheia no mobile para não cortar o valor longo) */}
+          <div className="col-span-2 lg:col-span-1 p-4 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] md:text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Faturamento Total
+              </span>
+              <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+                <MapPin className="h-4 w-4" />
               </div>
-              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
-                <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="mt-2 md:mt-3">
+              <div className="text-xl md:text-2xl font-bold font-mono text-foreground tracking-tight">
+                R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-[11px] md:text-xs text-muted-foreground mt-0.5 block">
+                Volume acumulado da carteira
+              </span>
+            </div>
+          </div>
 
-          <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Municípios Atendidos</p>
-                <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-0.5 sm:mt-1 truncate">{totalCitiesCovered}</p>
+          {/* Municípios Atendidos */}
+          <div className="col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                Municípios
+              </span>
+              <div className="p-1 rounded-md bg-slate-100 text-slate-700">
+                <Building2 className="h-3.5 w-3.5" />
               </div>
-              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
-                <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="mt-2 md:mt-3">
+              <div className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
+                {totalCitiesCovered}
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+                Cidades atendidas
+              </span>
+            </div>
+          </div>
 
-          <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Total de Clientes</p>
-                <p className="text-lg sm:text-2xl font-extrabold text-slate-900 mt-0.5 sm:mt-1 truncate">{totalClients}</p>
+          {/* Total de Clientes */}
+          <div className="col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                Clientes
+              </span>
+              <div className="p-1 rounded-md bg-slate-100 text-slate-700">
+                <Users className="h-3.5 w-3.5" />
               </div>
-              <div className="p-2 sm:p-2.5 rounded-lg bg-slate-100 text-slate-700 shrink-0">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="mt-2 md:mt-3">
+              <div className="text-xl md:text-2xl font-bold text-foreground tracking-tight">
+                {totalClients}
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+                Base cadastrada
+              </span>
+            </div>
+          </div>
 
-          <Card className="shadow-2xs border-slate-200">
-            <CardContent className="p-3.5 sm:p-4 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 truncate">Comissão Projetada</p>
-                <p className="text-lg sm:text-2xl font-extrabold font-mono text-emerald-800 mt-0.5 sm:mt-1 truncate">
-                  R$ {(totalRevenue * 0.04).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
+          {/* Comissão Projetada */}
+          <div className="col-span-2 sm:col-span-1 p-3.5 md:p-5 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                Comissão Projetada
+              </span>
+              <div className="p-1 rounded-md bg-emerald-50 text-emerald-700">
+                <DollarSign className="h-3.5 w-3.5" />
               </div>
-              <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-50 text-emerald-700 shrink-0">
-                <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="mt-2 md:mt-3">
+              <div className="text-xl md:text-2xl font-bold font-mono text-emerald-700 tracking-tight">
+                R$ {(totalRevenue * 0.04).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-            </CardContent>
-          </Card>
+              <span className="text-[10px] md:text-xs text-muted-foreground mt-0.5 block truncate">
+                Estimativa média de 4%
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* MAPA DO BRASIL INTERATIVO COM DRILLDOWN DE FATURAMENTO E CIDADES */}
