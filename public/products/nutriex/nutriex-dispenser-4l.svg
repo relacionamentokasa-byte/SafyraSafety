@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" width="400" height="500">
+  <defs>
+    <linearGradient id="bgGrad6" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="dispGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#cbd5e1"/>
+      <stop offset="20%" stop-color="#f8fafc"/>
+      <stop offset="80%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+    <filter id="dispShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-opacity="0.16" flood-color="#0f172a"/>
+    </filter>
+  </defs>
+
+  <rect width="400" height="500" rx="16" fill="url(#bgGrad6)"/>
+  <ellipse cx="200" cy="460" rx="100" ry="14" fill="#000000" opacity="0.12" filter="blur(4px)"/>
+
+  <g filter="url(#dispShadow)">
+    <rect x="110" y="70" width="180" height="360" rx="14" fill="#1e293b"/>
+    <rect x="120" y="85" width="160" height="330" rx="12" fill="url(#dispGrad)" stroke="#cbd5e1" stroke-width="1.5"/>
+
+    <rect x="175" y="160" width="50" height="140" rx="6" fill="#94a3b8" opacity="0.2" stroke="#64748b" stroke-width="1.5"/>
+    <rect x="178" y="200" width="44" height="95" rx="4" fill="#f59e0b" opacity="0.6"/>
+
+    <rect x="140" y="350" width="120" height="45" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+    <text x="200" y="378" font-family="Arial, sans-serif" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle" letter-spacing="2">EMPURRE</text>
+
+    <text x="200" y="125" font-family="Arial, sans-serif" font-weight="900" font-size="15" fill="#0f172a" text-anchor="middle" letter-spacing="1.5">NUTRIEX</text>
+    <text x="200" y="140" font-family="Arial, sans-serif" font-weight="700" font-size="9" fill="#64748b" text-anchor="middle">DISPENSER PROFISSIONAL 4L</text>
+  </g>
+</svg>
