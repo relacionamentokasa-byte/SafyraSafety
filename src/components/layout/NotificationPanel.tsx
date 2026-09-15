@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { 
-  Bell, 
-  Check, 
-  CheckCheck, 
-  ExternalLink, 
+import {
+  Bell,
+  Check,
+  CheckCheck,
+  ExternalLink,
   Clock,
   Calendar,
   AlertCircle,
@@ -11,44 +11,67 @@ import {
   TrendingUp,
   DollarSign,
   Package,
+  Smartphone,
   X
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { 
-  getNotifications, 
-  getUnreadNotificationsCount, 
-  markAsRead, 
-  markAllAsRead 
+import {
+  getNotifications,
+  getUnreadNotificationsCount,
+  markAsRead,
+  markAllAsRead
 } from '@/lib/notifications.services';
+import {
+  subscribeUserToPush,
+  checkPushSubscriptionStatus
+} from '@/lib/push-notifications';
 import { Notification } from '@/types/database.types';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from '@tanstack/react-router';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export function NotificationPanel() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [isPushActive, setIsPushActive] = useState(false);
+  const [isActivatingPush, setIsActivatingPush] = useState(false);
   const navigate = useNavigate();
 
   const loadNotifications = async () => {
     try {
-      const [data, count] = await Promise.all([
+      const [data, count, pushStatus] = await Promise.all([
         getNotifications(),
-        getUnreadNotificationsCount()
+        getUnreadNotificationsCount(),
+        checkPushSubscriptionStatus()
       ]);
       setNotifications(data.slice(0, 5)); // Recent 5
       setUnreadCount(count);
+      setIsPushActive(pushStatus);
     } catch (error) {
       console.error('Error loading notifications:', error);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    setIsActivatingPush(true);
+    const result = await subscribeUserToPush();
+    setIsActivatingPush(false);
+
+    if (result.success) {
+      setIsPushActive(true);
+      toast.success("Notificações Push ativadas com sucesso!");
+    } else {
+      toast.error(result.error || "Não foi possível ativar as notificações push.");
     }
   };
 
@@ -130,9 +153,9 @@ export function NotificationPanel() {
       <PopoverContent className="w-80 p-0" align="end">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold text-sm">Notificações</h3>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="text-xs h-8 px-2 gap-1 text-muted-foreground hover:text-primary"
             onClick={handleMarkAllAsRead}
           >
@@ -140,6 +163,28 @@ export function NotificationPanel() {
             Marcar todas
           </Button>
         </div>
+
+        {/* Banner de Ativação Push no Celular / Dispositivo */}
+        {!isPushActive && (
+          <div className="p-3 bg-slate-900 text-white flex items-center justify-between gap-2 text-xs border-b border-slate-800">
+            <div className="flex items-center gap-2 min-w-0">
+              <Smartphone className="h-4 w-4 text-blue-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium text-[11px] leading-tight text-white">Alertas no Celular</p>
+                <p className="text-[10px] text-slate-400 leading-tight truncate">Receba avisos em tempo real</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 px-2.5 text-[11px] bg-white text-slate-900 hover:bg-slate-100 font-semibold shrink-0"
+              onClick={handleEnablePush}
+              disabled={isActivatingPush}
+            >
+              {isActivatingPush ? "Ativando..." : "Ativar"}
+            </Button>
+          </div>
+        )}
         <ScrollArea className="h-80">
           {notifications.length > 0 ? (
             <div className="divide-y">
