@@ -93,7 +93,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Safyra Safety - Gestão Comercial" },
       { property: "og:description", content: "Sistema inteligente para gestão de equipes de vendas e operações de campo." },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: "/pwa-512x512.png" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:image", content: "/pwa-512x512.png" },
     ],
     links: [
       {
