@@ -1,5 +1,5 @@
-// Service Worker para Safyra Safety PWA com Suporte a Web Push Notifications
-const CACHE_NAME = 'safyra-pwa-v2';
+// Service Worker para Safyra Safety PWA com Suporte a Web Push Notifications - v3
+const CACHE_NAME = 'safyra-pwa-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
