@@ -283,21 +283,6 @@ function RoteirizacaoPage() {
                 )}
               </div>
             </ScrollArea>
-            
-            <div className="p-4 border-t bg-muted/10 space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-between group h-10"
-                disabled={selectedClients.length < 2}
-                onClick={optimizeSequence}
-              >
-                <span className="flex items-center gap-2">
-                  <Navigation size={14} className="text-blue-500" />
-                  Otimizar Sequência
-                </span>
-                <ChevronRight size={14} className="opacity-50 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </div>
           </div>
 
           {/* Lado Direito: Mapa */}
