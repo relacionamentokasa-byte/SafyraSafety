@@ -151,7 +151,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 pb-32 md:pb-8 min-h-0 touch-pan-y -webkit-overflow-scrolling-touch">
-          <div className="w-full max-w-7xl mx-auto space-y-6">{children}</div>
+          <div className="w-full space-y-6">{children}</div>
         </main>
       </div>
 
