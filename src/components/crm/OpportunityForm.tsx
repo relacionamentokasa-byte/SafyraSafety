@@ -37,13 +37,21 @@ export function OpportunityForm({ onSuccess }: { onSuccess: () => void }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, trade_name, legal_name')
+        .select('id, name, trade_name, legal_name, city, state, cnpj')
         .order('name');
       if (error) throw error;
-      return (data || []).map((c: any) => ({
-        id: c.id,
-        name: formatClientDisplayName(c),
-      }));
+      return (data || []).map((c: any) => {
+        const loc = [c.city, c.state].filter(Boolean).join(' - ');
+        const cnpjFormatted = c.cnpj && c.cnpj.length === 14
+          ? c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+          : c.cnpj;
+        const details = [loc, cnpjFormatted].filter(Boolean).join(' • ');
+        const baseName = formatClientDisplayName(c);
+        return {
+          id: c.id,
+          name: details ? `${baseName} (${details})` : baseName,
+        };
+      });
     }
   });
 

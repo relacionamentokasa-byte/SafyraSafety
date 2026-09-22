@@ -22,12 +22,14 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
-  Map as MapIcon
+  Map as MapIcon,
+  X
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useDeferredValue, useMemo } from 'react';
 import { getClients, getClientsStats, getMapClients } from '@/lib/clients.services';
+import { PREDEFINED_REGIONS, UF_NAMES } from '@/lib/regions.services';
 import { formatClientDisplayName, formatDisplayName } from '@/lib/format-name';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
 import { ClientForm } from '@/components/clientes/ClientForm';
@@ -43,6 +45,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { format, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +59,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { GoogleMap } from '@/components/campo/GoogleMap';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { enrichAllClientsGeocoding } from '@/lib/clients.functions';
+import { toast } from 'sonner';
+import { RefreshCw } from 'lucide-react';
 
 export const Route = createFileRoute('/clientes/')({
   validateSearch: (search: Record<string, unknown>): { view?: string } => {
@@ -83,12 +90,77 @@ function ClientsPage() {
 
   const [editingClient, setEditingClient] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [regionFilter, setRegionFilter] = useState<string>('all');
+  const [stateFilter, setStateFilter] = useState<string>('all');
+  const [cityFilter, setCityFilter] = useState<string>('all');
+  const [isEnrichingCoords, setIsEnrichingCoords] = useState(false);
+
+  const handleEnrichCoordinates = async () => {
+    try {
+      setIsEnrichingCoords(true);
+      toast.info("Buscando CNPJs, endereços e coordenadas GPS dos clientes...");
+
+      const res = await enrichAllClientsGeocoding();
+      if (res.success) {
+        toast.success(`Geolocalização concluída! ${res.updated} clientes atualizados com Latitude e Longitude.`);
+        refetch();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Não foi possível atualizar as coordenadas de todos os clientes.");
+    } finally {
+      setIsEnrichingCoords(false);
+    }
+  };
+
+  // Buscar todos os clientes para extrair estados e cidades disponíveis dinamicamente
+  const { data: allClientsRaw = [] } = useQuery({
+    queryKey: ['clients-filter-options'],
+    queryFn: async () => {
+      const res = await getClients({ pageSize: 1500 });
+      return res.data || [];
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const availableStates = useMemo(() => {
+    const states = new Set<string>();
+    allClientsRaw.forEach((c: any) => {
+      if (c.state) states.add(c.state.toUpperCase().trim());
+    });
+    return Array.from(states).sort();
+  }, [allClientsRaw]);
+
+  const availableCities = useMemo(() => {
+    let list = allClientsRaw;
+    if (stateFilter !== 'all') {
+      list = list.filter((c: any) => String(c.state || '').toUpperCase().trim() === stateFilter.toUpperCase().trim());
+    } else if (regionFilter !== 'all') {
+      const reg = PREDEFINED_REGIONS.find((r) => r.id === regionFilter);
+      if (reg) {
+        const regStates = reg.statesCovered.map((s) => s.toUpperCase().trim());
+        list = list.filter((c: any) => regStates.includes(String(c.state || '').toUpperCase().trim()));
+      }
+    }
+    const cities = new Set<string>();
+    list.forEach((c: any) => {
+      if (c.city) cities.add(c.city.trim());
+    });
+    return Array.from(cities).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [allClientsRaw, stateFilter, regionFilter]);
+
+  const activeFiltersCount = (statusFilter !== 'all' ? 1 : 0) +
+    (regionFilter !== 'all' ? 1 : 0) +
+    (stateFilter !== 'all' ? 1 : 0) +
+    (cityFilter !== 'all' ? 1 : 0);
 
   const { data: clientsData, isLoading, refetch } = useQuery({
-    queryKey: ['clients-list', deferredSearch, page, statusFilter, pageSize],
+    queryKey: ['clients-list', deferredSearch, page, statusFilter, regionFilter, stateFilter, cityFilter, pageSize],
     queryFn: () => getClients({
       search: deferredSearch,
       status: statusFilter,
+      region: regionFilter,
+      state: stateFilter,
+      city: cityFilter,
       page,
       pageSize
     }),
@@ -96,12 +168,15 @@ function ClientsPage() {
   });
 
   const { data: mapClientsData = [], isLoading: isLoadingMap } = useQuery({
-    queryKey: ['clients-map-all', deferredSearch, statusFilter],
+    queryKey: ['clients-map-all', deferredSearch, statusFilter, regionFilter, stateFilter, cityFilter],
     queryFn: async () => {
-      const res = await getMapClients(deferredSearch);
-      if (statusFilter !== 'all') {
-        return res.filter(c => c.status === statusFilter);
-      }
+      const res = await getMapClients({
+        search: deferredSearch,
+        status: statusFilter,
+        region: regionFilter,
+        state: stateFilter,
+        city: cityFilter,
+      });
       return res;
     },
     enabled: viewMode === 'map',
@@ -186,7 +261,7 @@ function ClientsPage() {
   const stats = [
     { label: 'Total de Clientes', value: (clientsAll?.total || 0).toString(), icon: Users, color: 'text-blue-500' },
     { label: 'Clientes Ativos', value: (clientsAll?.active || 0).toString(), icon: UserCheck, color: 'text-green-500' },
-    { label: 'Novos (Mês)', value: statsData?.new_clients_month?.toString() || '0', icon: Plus, color: 'text-purple-500' },
+    { label: 'Novos (Mês)', value: (clientsAll?.newThisMonth || 0).toString(), icon: Plus, color: 'text-purple-500' },
     { label: 'Pendentes', value: (clientsAll?.prospect || 0).toString(), icon: ShoppingBag, color: 'text-orange-500' },
     { label: 'Sem Visita', value: '0', icon: Calendar, color: 'text-red-500' },
   ];
@@ -201,15 +276,41 @@ function ClientsPage() {
             <p className="text-sm text-muted-foreground mt-1">Gerencie contas ativas, prospects e inteligência geográfica de atendimento.</p>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            <Tabs value={viewMode} onValueChange={(v: any) => {
-              setViewMode(v);
-              navigate({ to: '/clientes', search: v === 'map' ? { view: 'map' } : {} as any, replace: true });
-            }} className="mr-2">
-              <TabsList className="grid w-[200px] grid-cols-2">
-                <TabsTrigger value="list" className="gap-2"><List size={14}/> Lista</TabsTrigger>
-                <TabsTrigger value="map" className="gap-2"><MapIcon size={14}/> Mapa</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex bg-muted p-1 rounded-lg border gap-1 mr-2">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                className="gap-2 h-8 text-xs font-semibold"
+                onClick={() => {
+                  setViewMode('list');
+                  navigate({ to: '/clientes', search: {} as any, replace: true });
+                }}
+              >
+                <List size={14}/> Lista
+              </Button>
+              <Button
+                variant={viewMode === 'map' ? 'default' : 'ghost'}
+                size="sm"
+                className="gap-2 h-8 text-xs font-semibold"
+                onClick={() => {
+                  setViewMode('map');
+                  navigate({ to: '/clientes', search: { view: 'map' } as any, replace: true });
+                }}
+              >
+                <MapIcon size={14}/> Mapa
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={handleEnrichCoordinates}
+              disabled={isEnrichingCoords}
+              className="gap-2 text-xs"
+              title="Atualizar Latitude e Longitude de todos os clientes via CNPJ/CEP"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isEnrichingCoords && "animate-spin")} />
+              {isEnrichingCoords ? "Geocodificando..." : "Atualizar GPS (CNPJs)"}
+            </Button>
 
             <Button variant="outline" className="hidden lg:flex" asChild>
               <Link to="/campo/roteirizacao">
@@ -332,26 +433,81 @@ function ClientsPage() {
           <div className="flex gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="mr-2 h-4 w-4" />
+                <Button variant="outline" className="gap-2">
+                  <Filter className="h-4 w-4" />
                   Filtros
-                  {statusFilter !== 'all' && (
-                    <Badge variant="secondary" className="ml-2 px-1 h-4 min-w-4 rounded-full bg-primary text-primary-foreground">
-                      !
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="px-1.5 py-0 h-5 text-[11px] rounded-full bg-primary text-primary-foreground font-semibold">
+                      {activeFiltersCount}
                     </Badge>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 space-y-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium leading-none">Filtros de Clientes</h4>
-                  <p className="text-sm text-muted-foreground">Refine sua lista de carteira.</p>
+              <PopoverContent className="w-88 space-y-4 p-5" align="end">
+                <div className="space-y-1">
+                  <h4 className="font-semibold text-sm leading-none">Filtros de Clientes</h4>
+                  <p className="text-xs text-muted-foreground">Refine por região geográfica, UF, cidade ou status da conta.</p>
                 </div>
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <Label>Status</Label>
+                <div className="grid gap-3.5">
+                  {/* Região Comercial */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Região / Território</Label>
+                    <Select value={regionFilter} onValueChange={(val) => { setRegionFilter(val); setCityFilter('all'); setPage(0); }}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Todas as regiões" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as regiões</SelectItem>
+                        {PREDEFINED_REGIONS.map((reg) => (
+                          <SelectItem key={reg.id} value={reg.id} className="text-xs">
+                            {reg.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Estado (UF) */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Estado (UF)</Label>
+                    <Select value={stateFilter} onValueChange={(val) => { setStateFilter(val); setCityFilter('all'); setPage(0); }}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Todos os estados" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os estados</SelectItem>
+                        {availableStates.map((uf) => (
+                          <SelectItem key={uf} value={uf} className="text-xs">
+                            {uf} - {UF_NAMES[uf] || uf}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Cidade */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Cidade</Label>
+                    <Select value={cityFilter} onValueChange={(val) => { setCityFilter(val); setPage(0); }}>
+                      <SelectTrigger className="h-9 text-xs">
+                        <SelectValue placeholder="Todas as cidades" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as cidades ({availableCities.length})</SelectItem>
+                        {availableCities.map((cityName) => (
+                          <SelectItem key={cityName} value={cityName} className="text-xs">
+                            {cityName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status da Conta */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Status da Conta</Label>
                     <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(0); }}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-9 text-xs">
                         <SelectValue placeholder="Todos os status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -364,23 +520,101 @@ function ClientsPage() {
                     </Select>
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-xs"
-                    onClick={() => {
-                      setStatusFilter('all');
-                      setPage(0);
-                    }}
-                  >
-                    Limpar Filtros
-                  </Button>
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => {
+                        setStatusFilter('all');
+                        setRegionFilter('all');
+                        setStateFilter('all');
+                        setCityFilter('all');
+                        setPage(0);
+                      }}
+                    >
+                      Limpar Filtros
+                    </Button>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>
             <Button variant="outline" className="hidden md:flex">Exportar</Button>
           </div>
         </div>
+
+        {/* Chips de Filtros Ativos */}
+        {activeFiltersCount > 0 && (
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <span className="text-xs text-muted-foreground font-medium">Filtros ativos:</span>
+            {regionFilter !== 'all' && (
+              <Badge variant="outline" className="gap-1 text-xs bg-muted/40 font-normal pl-2 pr-1 py-1">
+                Região: {PREDEFINED_REGIONS.find((r) => r.id === regionFilter)?.name || regionFilter}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                  onClick={() => { setRegionFilter('all'); setPage(0); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
+            {stateFilter !== 'all' && (
+              <Badge variant="outline" className="gap-1 text-xs bg-muted/40 font-normal pl-2 pr-1 py-1">
+                UF: {stateFilter} ({UF_NAMES[stateFilter] || stateFilter})
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                  onClick={() => { setStateFilter('all'); setPage(0); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
+            {cityFilter !== 'all' && (
+              <Badge variant="outline" className="gap-1 text-xs bg-muted/40 font-normal pl-2 pr-1 py-1">
+                Cidade: {cityFilter}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                  onClick={() => { setCityFilter('all'); setPage(0); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
+            {statusFilter !== 'all' && (
+              <Badge variant="outline" className="gap-1 text-xs bg-muted/40 font-normal pl-2 pr-1 py-1">
+                Status: {statusFilter === 'active' ? 'Ativo' : statusFilter === 'inactive' ? 'Inativo' : statusFilter === 'prospect' ? 'Prospect' : 'Bloqueado'}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 p-0 ml-1 hover:bg-transparent"
+                  onClick={() => { setStatusFilter('all'); setPage(0); }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-6 px-2 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setStatusFilter('all');
+                setRegionFilter('all');
+                setStateFilter('all');
+                setCityFilter('all');
+                setPage(0);
+              }}
+            >
+              Limpar todos
+            </Button>
+          </div>
+        )}
 
         {viewMode === 'map' ? (
           <div className="flex-1 min-h-[500px] border rounded-lg bg-card overflow-hidden relative">
@@ -463,8 +697,19 @@ function ClientsPage() {
                             <span className="text-slate-400 font-normal">Direto</span>
                           )}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-center text-sm text-slate-400 font-mono">
-                          -
+                        <TableCell className="hidden lg:table-cell text-center text-sm font-mono">
+                          {client.last_order_at ? (
+                            <div className="flex flex-col items-center">
+                              <span className="font-semibold text-slate-800">
+                                {format(new Date(client.last_order_at), "dd/MM/yyyy", { locale: ptBR })}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {differenceInDays(new Date(), new Date(client.last_order_at))} dias atrás
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-center text-sm text-slate-400 font-mono">
                           -

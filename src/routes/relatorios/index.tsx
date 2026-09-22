@@ -20,8 +20,16 @@ import {
   Award,
   Building2,
   Calendar,
-  Layers
+  Layers,
+  Search
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +57,8 @@ import {
 } from "recharts";
 
 import { ManufacturerLogo } from "@/components/manufacturers/ManufacturerLogo";
+import { calculateClientCommercialStatus } from "@/lib/client-metrics.utils";
+import { resolveOrderManufacturer } from "@/lib/order-manufacturers.utils";
 
 export const Route = createFileRoute("/relatorios/")({
   head: () => ({
@@ -67,6 +77,8 @@ function ReportsPage() {
   const [selectedMfgTab, setSelectedMfgTab] = React.useState<string>('');
   const [clientViewMode, setClientViewMode] = React.useState<'group' | 'branch'>('group');
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
+  const [churnModalType, setChurnModalType] = React.useState<'active' | 'churned' | 'never_bought' | null>(null);
+  const [churnSearchTerm, setChurnSearchTerm] = React.useState<string>('');
 
   const toggleGroupExpand = (groupKey: string) => {
     setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
@@ -298,30 +310,23 @@ function ReportsPage() {
         clientLastOrder.set(o.client_id, prev);
       });
 
-      // Critério: Inativo há mais de 60 dias da data do último pedido do sistema
-      const latestSystemOrder = orders && orders.length > 0
-        ? new Date(Math.max(...orders.map(o => new Date(o.created_at).getTime())))
-        : now;
-
       let activeCount = 0;
       let churnCount = 0;
       let newCount = 0;
 
-      const clientsWithMetrics = (clients || []).map(c => {
+      const clientsWithMetrics = (clients || [])
+        .filter((c: any) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14))
+        .map(c => {
         const orderStat = clientLastOrder.get(c.id);
-        let churnRisk = 'never_bought';
-        let daysSinceLast = -1;
+        const { status: commStatus, daysSinceLastOrder } = calculateClientCommercialStatus(orderStat?.lastDate, now);
 
-        if (orderStat) {
-          const lastOrderDate = new Date(orderStat.lastDate);
-          daysSinceLast = Math.floor((latestSystemOrder.getTime() - lastOrderDate.getTime()) / (1000 * 60 * 60 * 24));
-          if (daysSinceLast <= 60) {
-            churnRisk = 'active';
-            activeCount++;
-          } else {
-            churnRisk = 'churned';
-            churnCount++;
-          }
+        let churnRisk = 'never_bought';
+        if (commStatus === 'active') {
+          churnRisk = 'active';
+          activeCount++;
+        } else if (commStatus === 'warning' || commStatus === 'churn') {
+          churnRisk = 'churned';
+          churnCount++;
         } else {
           newCount++;
         }
@@ -331,7 +336,7 @@ function ReportsPage() {
           orderCount: orderStat?.count || 0,
           totalSpent: orderStat?.totalAmount || 0,
           lastOrderDate: orderStat?.lastDate || null,
-          daysSinceLast,
+          daysSinceLast: daysSinceLastOrder ?? -1,
           churnRisk
         };
       });
@@ -341,7 +346,7 @@ function ReportsPage() {
 
       return {
         clients: clientsWithMetrics,
-        total: clients?.length || 0,
+        total: clientsWithMetrics.length,
         active: activeCount,
         churned: churnCount,
         neverBought: newCount,
@@ -1593,18 +1598,42 @@ function ReportsPage() {
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-xl bg-slate-50 border">
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-500">Ativos (&le;60d)</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChurnModalType('active');
+                    setChurnSearchTerm('');
+                  }}
+                  className="p-2 rounded-lg hover:bg-emerald-50/80 transition-all text-center group cursor-pointer border border-transparent hover:border-emerald-200"
+                >
+                  <p className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-emerald-700">Ativos (&le;60d)</p>
                   <p className="text-xl font-extrabold text-emerald-600 mt-0.5">{clientAnalysis?.active || 0}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-500">Inativos (&gt;60d)</p>
+                  <span className="text-[10px] text-emerald-600 underline opacity-0 group-hover:opacity-100 transition-opacity font-medium">Ver lista</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChurnModalType('churned');
+                    setChurnSearchTerm('');
+                  }}
+                  className="p-2 rounded-lg hover:bg-amber-50/80 transition-all text-center group cursor-pointer border border-transparent hover:border-amber-200"
+                >
+                  <p className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-amber-700">Inativos (&gt;60d)</p>
                   <p className="text-xl font-extrabold text-amber-600 mt-0.5">{clientAnalysis?.churned || 0}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-500">Sem Compra</p>
+                  <span className="text-[10px] text-amber-600 underline opacity-0 group-hover:opacity-100 transition-opacity font-medium">Ver lista</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChurnModalType('never_bought');
+                    setChurnSearchTerm('');
+                  }}
+                  className="p-2 rounded-lg hover:bg-slate-200/60 transition-all text-center group cursor-pointer border border-transparent hover:border-slate-300"
+                >
+                  <p className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-800">Sem Compra</p>
                   <p className="text-xl font-extrabold text-slate-600 mt-0.5">{clientAnalysis?.neverBought || 0}</p>
-                </div>
+                  <span className="text-[10px] text-slate-600 underline opacity-0 group-hover:opacity-100 transition-opacity font-medium">Ver lista</span>
+                </button>
               </div>
 
               <div className="space-y-2">
@@ -1624,7 +1653,19 @@ function ReportsPage() {
               </div>
 
               <div className="border-t pt-3 space-y-2">
-                <p className="text-xs font-bold text-slate-800">Clientes sem compra recente (+60d):</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-800">Clientes sem compra recente (+60d):</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChurnModalType('churned');
+                      setChurnSearchTerm('');
+                    }}
+                    className="text-[11px] text-primary hover:underline font-semibold"
+                  >
+                    Ver todos ({clientAnalysis?.churned || 0})
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {clientAnalysis?.clients
                     ?.filter(c => c.churnRisk === 'churned')
@@ -1651,6 +1692,128 @@ function ReportsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Modal / Diálogo de Detalhamento da Saúde da Carteira */}
+      <Dialog open={churnModalType !== null} onOpenChange={(open) => !open && setChurnModalType(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-5 pb-3 border-b bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-base font-bold flex items-center gap-2">
+                  {churnModalType === 'active' && (
+                    <>
+                      <span className="h-3 w-3 rounded-full bg-emerald-500 inline-block" />
+                      Clientes Ativos (&le;60 dias)
+                    </>
+                  )}
+                  {churnModalType === 'churned' && (
+                    <>
+                      <span className="h-3 w-3 rounded-full bg-amber-500 inline-block" />
+                      Clientes Inativos / Em Churn (&gt;60 dias)
+                    </>
+                  )}
+                  {churnModalType === 'never_bought' && (
+                    <>
+                      <span className="h-3 w-3 rounded-full bg-slate-400 inline-block" />
+                      Clientes Sem Compra Registrada
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="text-xs mt-1">
+                  {churnModalType === 'active' && 'Contas com pedidos recentes e relacionamento comercial saudável.'}
+                  {churnModalType === 'churned' && 'Contas que compraram anteriormente mas estão há mais de 60 dias sem novo pedido.'}
+                  {churnModalType === 'never_bought' && 'Contas cadastradas na carteira que ainda não efetuaram pedidos.'}
+                </DialogDescription>
+              </div>
+            </div>
+            {/* Campo de Busca Rápida no Modal */}
+            <div className="relative mt-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar cliente por nome ou CNPJ..."
+                value={churnSearchTerm}
+                onChange={(e) => setChurnSearchTerm(e.target.value)}
+                className="pl-8 h-8 text-xs bg-white"
+              />
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {(() => {
+              const list = (clientAnalysis?.clients || [])
+                .filter(c => c.churnRisk === churnModalType)
+                .filter(c => {
+                  if (!churnSearchTerm.trim()) return true;
+                  const term = churnSearchTerm.toLowerCase().trim();
+                  return (
+                    (c.name || '').toLowerCase().includes(term) ||
+                    (c.trade_name || '').toLowerCase().includes(term) ||
+                    (c.cnpj || '').toLowerCase().includes(term)
+                  );
+                })
+                .sort((a, b) => {
+                  if (churnModalType === 'churned') {
+                    return b.daysSinceLast - a.daysSinceLast;
+                  }
+                  return b.totalSpent - a.totalSpent;
+                });
+
+              if (list.length === 0) {
+                return (
+                  <div className="text-center py-12 text-muted-foreground text-xs">
+                    Nenhum cliente encontrado para este filtro.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="divide-y border rounded-lg overflow-hidden bg-white">
+                  {list.map((c, i) => (
+                    <div key={c.id || i} className="p-3 hover:bg-slate-50/70 transition-colors flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900 truncate">{c.trade_name || c.name}</span>
+                          {c.trade_name && c.name && c.trade_name !== c.name && (
+                            <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">({c.name})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono mt-0.5">
+                          <span>{c.cnpj || 'Sem CNPJ'}</span>
+                          {c.daysSinceLast >= 0 && (
+                            <span className={cn(
+                              "font-semibold",
+                              c.daysSinceLast <= 60 ? "text-emerald-600" : "text-amber-600"
+                            )}>
+                              {c.daysSinceLast} {c.daysSinceLast === 1 ? 'dia sem compra' : 'dias sem compra'}
+                            </span>
+                          )}
+                          {c.orderCount > 0 && (
+                            <span className="text-slate-400">({c.orderCount} {c.orderCount === 1 ? 'pedido' : 'pedidos'})</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right font-mono shrink-0">
+                        {c.totalSpent > 0 ? (
+                          <>
+                            <span className="text-xs font-bold text-slate-900 block">
+                              R$ {c.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">Total Faturado</span>
+                          </>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] font-normal text-slate-500 bg-slate-50">
+                            Sem Faturamento
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

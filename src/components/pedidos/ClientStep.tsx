@@ -15,6 +15,8 @@ type ClientOption = {
   id: string;
   name: string;
   cnpj?: string | null;
+  city?: string | null;
+  state?: string | null;
   representative_id?: string | null;
 };
 
@@ -85,7 +87,16 @@ export function ClientStep() {
                 </div>
                 <div>
                   <p className="font-medium">{formatDisplayName(client.name)}</p>
-                  <p className="text-xs text-muted-foreground">CNPJ: {client.cnpj || 'N/A'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[
+                      [client.city, client.state].filter(Boolean).join(" - "),
+                      client.cnpj
+                        ? `CNPJ: ${client.cnpj.length === 14 ? client.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : client.cnpj}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ") || "Sem localização/CNPJ"}
+                  </p>
                 </div>
               </div>
             </CardContent>

@@ -7,11 +7,16 @@ import {
   Building2,
   Check,
   Plus,
-  Loader2
+  Loader2,
+  ReceiptText,
+  Calendar,
+  Layers
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ManufacturerLogo } from '@/components/manufacturers/ManufacturerLogo';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface ClientMixPitchDrawerProps {
   clientId: string;
@@ -44,7 +49,11 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
     );
   }
 
-  const buyingMfgs = diagnostic.manufacturerPenetration.filter(m => m.isBuying);
+  const manufacturerPenetration = diagnostic.manufacturerPenetration || [];
+  const recentOrders = diagnostic.recentOrders || [];
+  const frequentProducts = diagnostic.frequentProducts || [];
+  const mixOpportunities = diagnostic.mixOpportunities || [];
+  const buyingMfgs = manufacturerPenetration.filter(m => m.isBuying);
 
   return (
     <div className="space-y-6">
@@ -52,11 +61,11 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-slate-900 text-white border border-slate-800">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Diagnóstico de Mix de Produtos
+            Diagnóstico de Mix e Histórico Comercial
           </span>
           <h3 className="text-base font-bold mt-0.5">{diagnostic.clientName}</h3>
           <p className="text-xs text-slate-400">
-            {diagnostic.city ? `${diagnostic.city} - ${diagnostic.state}` : 'Cliente Comercial'} • {diagnostic.ordersCount} pedidos realizados
+            {diagnostic.city ? `${diagnostic.city} - ${diagnostic.state}` : 'Cliente Comercial'} • {diagnostic.ordersCount || 0} {(diagnostic.ordersCount || 0) === 1 ? 'pedido registrado' : 'pedidos registrados'}
           </p>
         </div>
 
@@ -64,56 +73,77 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
           <div className="p-2.5 rounded bg-slate-800 border border-slate-700 text-right">
             <span className="text-[10px] text-slate-400 block uppercase font-medium">Total Faturado</span>
             <span className="text-sm font-bold font-mono text-white">
-              R$ {diagnostic.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {(diagnostic.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
         </div>
       </div>
 
-      {/* 2. TABELA / GRID DE FABRICANTES PARCEIROS */}
+      {/* 2. TABELA / GRID DE FABRICANTES PARCEIROS E LINHAS ADQUIRIDAS */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-            <Building2 className="h-4 w-4 text-slate-600" /> Fabricantes Ativos no Cliente
+            <Building2 className="h-4 w-4 text-slate-600" /> Penetração por Fabricante & Linhas Adquiridas
           </h4>
           <span className="text-xs text-slate-500 font-medium font-mono">
-            {buyingMfgs.length} de {diagnostic.manufacturerPenetration.length} indústrias
+            {buyingMfgs.length} de {manufacturerPenetration.length} indústrias ativas
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {diagnostic.manufacturerPenetration.map((mfg) => (
+          {manufacturerPenetration.map((mfg) => (
             <div
               key={mfg.manufacturerId}
-              className="p-3.5 rounded-lg border border-slate-200 bg-white shadow-2xs space-y-2.5"
+              className="p-3.5 rounded-lg border border-slate-200 bg-white shadow-2xs space-y-2.5 flex flex-col justify-between"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <ManufacturerLogo name={mfg.manufacturerName} logoPath={mfg.logoPath} size="sm" className="h-8 w-8 rounded border border-slate-100" />
-                  <div>
-                    <h5 className="font-bold text-xs text-slate-900">{mfg.manufacturerName}</h5>
-                    <p className="text-[10px] text-slate-500 font-medium">
-                      {mfg.isBuying ? (mfg.topCategory || 'Com compras registradas') : 'Sem histórico de compras'}
-                    </p>
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <ManufacturerLogo name={mfg.manufacturerName} logoPath={mfg.logoPath} size="sm" className="h-8 w-8 rounded border border-slate-100" />
+                    <div>
+                      <h5 className="font-bold text-xs text-slate-900">{mfg.manufacturerName}</h5>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        {mfg.isBuying ? `${mfg.itemsCount || 0} compra(s)` : 'Sem histórico de compras'}
+                      </p>
+                    </div>
                   </div>
+
+                  <span
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded border font-mono ${
+                      mfg.isBuying
+                        ? 'bg-slate-100 text-slate-800 border-slate-200'
+                        : 'bg-white text-slate-400 border-slate-200'
+                    }`}
+                  >
+                    {mfg.isBuying ? 'Ativo' : 'Sem compras'}
+                  </span>
                 </div>
 
-                <span
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded border font-mono ${
-                    mfg.isBuying
-                      ? 'bg-slate-100 text-slate-800 border-slate-200'
-                      : 'bg-white text-slate-500 border-slate-200'
-                  }`}
-                >
-                  {mfg.isBuying ? 'Ativo' : 'Disponível'}
-                </span>
+                {/* Linhas / Categorias Adquiridas */}
+                {mfg.isBuying && mfg.acquiredLines && mfg.acquiredLines.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
+                      <Layers className="h-3 w-3 text-slate-400" /> Linhas adquiridas:
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {mfg.acquiredLines.map((line, lIdx) => (
+                        <span
+                          key={lIdx}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium border border-slate-200"
+                        >
+                          {line}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex justify-between items-baseline text-xs">
-                <span className="text-[11px] text-slate-500">Volume acumulado:</span>
+              <div className="pt-2 border-t border-slate-100 flex justify-between items-baseline text-xs mt-2">
+                <span className="text-[11px] text-slate-500">Volume Faturado:</span>
                 <span className="font-bold font-mono text-slate-900">
                   {mfg.isBuying
-                    ? `R$ ${mfg.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    ? `R$ ${(mfg.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                     : 'R$ 0,00'}
                 </span>
               </div>
@@ -122,24 +152,81 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
         </div>
       </div>
 
-      {/* 3. BLOCO DUPLO: PRODUTOS MAIS COMPRADOS VS ITENS DO CATÁLOGO NÃO COMPRADOS */}
+      {/* 3. HISTÓRICO DE PEDIDOS RECENTES DO CLIENTE */}
+      <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+            <ReceiptText className="h-4 w-4 text-slate-600" /> Histórico de Pedidos & Faturamento
+          </h4>
+          <span className="text-[11px] text-slate-500 font-medium font-mono">
+            {recentOrders.length} pedido(s)
+          </span>
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <p className="text-xs text-slate-500 italic py-3 text-center">
+            Nenhum pedido faturado registrado no histórico.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {recentOrders.map((order) => {
+              const formattedDate = order.createdAt
+                ? format(new Date(order.createdAt), "dd 'de' MMM, yyyy", { locale: ptBR })
+                : 'Data não informada';
+
+              return (
+                <div
+                  key={order.id}
+                  className="p-2.5 rounded border border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs hover:border-slate-300 transition-colors"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-900">{order.orderNumber}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-slate-700 border border-slate-200 font-medium">
+                        {order.manufacturerName}
+                      </span>
+                      <span className="text-[10px] text-slate-400 capitalize">
+                        • {order.status === 'invoiced' ? 'Faturado' : order.status === 'delivered' ? 'Entregue' : order.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 line-clamp-1">
+                      {order.itemsSummary || 'Itens faturados'}
+                    </p>
+                  </div>
+
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center shrink-0 border-t sm:border-t-0 pt-1.5 sm:pt-0 border-slate-200">
+                    <span className="font-mono font-bold text-slate-900">
+                      R$ {(order.totalAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-slate-400" /> {formattedDate}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. BLOCO DUPLO: PRODUTOS MAIS COMPRADOS VS ITENS DO CATÁLOGO NÃO COMPRADOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* LADO ESQUERDO: Produtos mais recorrentes */}
         <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-slate-600" /> Histórico de Recompra
+              <TrendingUp className="h-4 w-4 text-slate-600" /> Itens Frequentes (Curva A do Cliente)
             </h4>
-            <span className="text-[11px] text-slate-500 font-medium">Itens frequentes</span>
+            <span className="text-[11px] text-slate-500 font-medium">Histórico</span>
           </div>
 
-          {diagnostic.frequentProducts.length === 0 ? (
+          {frequentProducts.length === 0 ? (
             <p className="text-xs text-slate-500 italic py-4 text-center">
-              Sem histórico de pedidos anteriores para este cliente.
+              Sem itens individualizados no histórico deste cliente.
             </p>
           ) : (
             <div className="space-y-2">
-              {diagnostic.frequentProducts.map((prod, idx) => (
+              {frequentProducts.map((prod, idx) => (
                 <div key={idx} className="p-2.5 rounded border border-slate-100 bg-slate-50/60 space-y-1.5 text-xs">
                   <div className="flex justify-between items-start gap-2">
                     <div>
@@ -150,7 +237,7 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
                     </div>
                     <div className="text-right shrink-0">
                       <span className="font-bold font-mono text-slate-900 block">
-                        R$ {prod.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(prod.totalSpent || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                       <span className="text-[10px] text-slate-500 font-mono">
                         {prod.totalQuantity} un
@@ -174,17 +261,17 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
         <div className="p-4 rounded-lg border border-slate-200 bg-white space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Package className="h-4 w-4 text-slate-600" /> Linhas Complementares do Catálogo
+              <Package className="h-4 w-4 text-slate-600" /> Oportunidades de Mix & Expansão
             </h4>
           </div>
 
-          {diagnostic.mixOpportunities.length === 0 ? (
+          {mixOpportunities.length === 0 ? (
             <p className="text-xs text-slate-500 italic py-4 text-center">
               Todas as linhas principais já foram adquiridas por este cliente.
             </p>
           ) : (
             <div className="space-y-2">
-              {diagnostic.mixOpportunities.map((opp, idx) => (
+              {mixOpportunities.map((opp, idx) => (
                 <div key={idx} className="p-3 rounded border border-slate-200 bg-white space-y-2 text-xs">
                   <div className="flex justify-between items-start gap-2">
                     <div>
@@ -198,9 +285,9 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
                     </div>
 
                     <div className="text-right shrink-0">
-                      {opp.estimatedTicket > 0 && (
+                      {(opp.estimatedTicket || 0) > 0 && (
                         <span className="font-semibold font-mono text-slate-900 text-xs block">
-                          R$ {opp.estimatedTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {(opp.estimatedTicket || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       )}
                     </div>
@@ -231,3 +318,4 @@ export function ClientMixPitchDrawer({ clientId, onSelectProductToPitch, classNa
     </div>
   );
 }
+

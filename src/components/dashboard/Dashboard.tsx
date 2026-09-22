@@ -11,7 +11,6 @@ import {
   ChevronRight
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { MyAttention } from "./MyAttention";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardData } from "@/lib/dashboard.services";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,9 +57,6 @@ export function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">
             Acompanhamento de vendas, faturamento e fluxo de comissões.
           </p>
-        </div>
-        <div className="w-full md:w-80">
-          <MyAttention />
         </div>
       </div>
 

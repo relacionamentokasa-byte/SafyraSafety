@@ -37,6 +37,7 @@ import { formatPaymentPlanSchedule } from '@/lib/payment-plans';
 import { formatDisplayName } from '@/lib/format';
 import { formatClientDisplayName } from '@/lib/format-name';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
+import { OrderPrintTemplate } from '@/components/pedidos/OrderPrintTemplate';
 import type { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -154,6 +155,20 @@ function OrderDetailsPage() {
     onError: (error: any) => {
       toast.error('Erro ao excluir pedido: ' + (error.message || error));
     }
+  });
+
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('company_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
   });
 
   const { data: order, isLoading, error: orderError } = useQuery({
@@ -278,7 +293,8 @@ function OrderDetailsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-full bg-muted/10">
+      <OrderPrintTemplate order={order} companySettings={companySettings} />
+      <div className="flex flex-col h-full bg-muted/10 print:hidden">
         <div className="p-4 md:p-8 bg-card border-b space-y-6">
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" asChild className="-ml-2">

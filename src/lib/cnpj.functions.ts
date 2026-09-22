@@ -28,6 +28,36 @@ export const getCompanyByCnpj = createServerFn({ method: "GET" })
 
       const companyData = await response.json();
 
+      const cepClean = (companyData.cep || companyData.zip_code || "").replace(/\D/g, "");
+      const address = companyData.logradouro || companyData.address || "";
+      const neighborhood = companyData.bairro || companyData.neighborhood || "";
+      const city = companyData.municipio || companyData.city || "";
+      const state = companyData.uf || companyData.state || "";
+
+      let latitude: number | undefined = undefined;
+      let longitude: number | undefined = undefined;
+
+      // Geocodificação automática de coordenadas GPS para o cliente
+      if (city && state) {
+        try {
+          const query = encodeURIComponent(`${address ? address + ', ' : ''}${city}, ${state}, Brasil`);
+          const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+            headers: {
+              'User-Agent': 'SafyraSafety/1.0 (comercial@safyrasafety.com.br)'
+            }
+          });
+          if (geoRes.ok) {
+            const geoJson = await geoRes.json();
+            if (geoJson && geoJson.length > 0) {
+              latitude = parseFloat(geoJson[0].lat);
+              longitude = parseFloat(geoJson[0].lon);
+            }
+          }
+        } catch (e) {
+          // ignora erro de geo
+        }
+      }
+
       // Normalizar campos que podem vir de APIs diferentes
       return {
         success: true,
@@ -35,15 +65,17 @@ export const getCompanyByCnpj = createServerFn({ method: "GET" })
           legalName: companyData.razao_social || companyData.legal_name || companyData.nome,
           tradeName: companyData.nome_fantasia || companyData.trade_name || companyData.fantasia || companyData.razao_social,
           cnpj: cleanCnpj,
-          cep: (companyData.cep || companyData.zip_code || "").replace(/\D/g, ""),
-          address: companyData.logradouro || companyData.address || "",
+          cep: cepClean,
+          address: address,
           number: companyData.numero || companyData.address_number || "",
           complement: companyData.complemento || companyData.address_complement || "",
-          neighborhood: companyData.bairro || companyData.neighborhood || "",
-          city: companyData.municipio || companyData.city || "",
-          state: companyData.uf || companyData.state || "",
+          neighborhood: neighborhood,
+          city: city,
+          state: state,
           phone: companyData.ddd_telefone_1 || companyData.telefone || companyData.phone || "",
           email: companyData.email || "",
+          latitude,
+          longitude,
         }
       };
     } catch (err: any) {

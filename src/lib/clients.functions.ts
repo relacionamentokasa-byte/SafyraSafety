@@ -189,46 +189,184 @@ export const cleanupAndMergeClients = createServerFn({ method: "POST" })
         .update({ client_id: m.toId })
         .eq('client_id', m.fromId);
 
+      // 3. Excluir o cliente duplicado/sem CNPJ
+      await supabase
+        .from('clients')
+        .delete()
+        .eq('id', m.fromId);
+
       migrationSummary.push({
-        target: m.name,
+        from: m.name,
         ordersMoved: updatedOrders?.length || 0,
-        orders: updatedOrders
       });
     }
 
-    // 2. Localizar todos os 24 clientes sem CNPJ para remoção
-    const { data: allClients, error: errFetch } = await supabase
-      .from('clients')
-      .select('id, cnpj, name');
+    return {
+      success: true,
+      message: 'Base higienizada com sucesso!',
+      summary: migrationSummary,
+    };
+  });
 
-    if (errFetch) throw new Error(errFetch.message);
+/**
+ * Função de servidor para enriquecimento em massa de Latitude e Longitude dos clientes
+ */
+export const enrichAllClientsGeocoding = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase;
 
-    const withoutCnpjIds = (allClients || [])
-      .filter((c: any) => !c.cnpj || !c.cnpj.replace(/\D/g, ''))
-      .map((c: any) => c.id);
+    // 1. Buscar todos os clientes
+    const { data: clients, error } = await supabase
+      .from("clients")
+      .select("id, name, legal_name, cnpj, zip_code, address, address_number, neighborhood, city, state, latitude, longitude");
 
-    // 3. Excluir os 24 clientes duplicados / sem CNPJ
-    const { error: deleteError } = await supabase
-      .from('clients')
-      .delete()
-      .in('id', withoutCnpjIds);
-
-    if (deleteError) {
-      console.error("Erro ao deletar clientes sem CNPJ:", deleteError);
-      throw new Error(deleteError.message);
+    if (error) {
+      throw new Error(`Erro ao buscar clientes: ${error.message}`);
     }
 
-    // 4. Conferência final
-    const { data: remainingClients } = await supabase.from('clients').select('id, name, cnpj');
-    const { data: totalOrders } = await supabase.from('orders').select('id, total_amount');
-    const totalAmount = (totalOrders || []).reduce((acc: number, curr: any) => acc + (Number(curr.total_amount) || 0), 0);
+    const validClients = (clients || []).filter((c: any) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14));
+
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
+    const results: Array<{ name: string; city?: string; state?: string; lat?: number; lng?: number; status: string }> = [];
+
+    for (const client of validClients) {
+      try {
+        const cleanCnpj = client.cnpj.replace(/\D/g, "");
+        let address = client.address || "";
+        let number = client.address_number || "";
+        let neighborhood = client.neighborhood || "";
+        let city = client.city || "";
+        let state = client.state || "";
+        let zipCode = (client.zip_code || "").replace(/\D/g, "");
+        let latitude = client.latitude;
+        let longitude = client.longitude;
+
+        // Se faltar endereço ou CEP completo, busca via BrasilAPI/Minha Receita
+        if (!city || !state || !zipCode || !address) {
+          try {
+            let res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+            if (!res.ok) {
+              res = await fetch(`https://minhareceita.org/${cleanCnpj}`);
+            }
+            if (res.ok) {
+              const data = await res.json();
+              city = city || data.municipio || data.city || "";
+              state = state || data.uf || data.state || "";
+              address = address || data.logradouro || data.address || "";
+              number = number || data.numero || data.address_number || "";
+              neighborhood = neighborhood || data.bairro || data.neighborhood || "";
+              zipCode = zipCode || (data.cep || "").replace(/\D/g, "");
+            }
+          } catch (e) {
+            // Segue com o que já tem
+          }
+        }
+
+        // Se ainda não tiver latitude/longitude, geocodifica
+        if (!latitude || !longitude) {
+          // Tentativa 1: Endereço completo + Cidade + UF
+          if (address && city && state) {
+            try {
+              const q1 = encodeURIComponent(`${address}${number ? ' ' + number : ''}, ${city}, ${state}, Brasil`);
+              const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${q1}&format=json&limit=1`, {
+                headers: { 'User-Agent': 'SafyraSafety/1.0 (comercial@safyrasafety.com.br)' }
+              });
+              if (geoRes.ok) {
+                const geo = await geoRes.json();
+                if (geo && geo.length > 0) {
+                  latitude = parseFloat(geo[0].lat);
+                  longitude = parseFloat(geo[0].lon);
+                }
+              }
+            } catch (e) {
+              // Segue
+            }
+          }
+
+          // Tentativa 2: CEP via BrasilAPI v2 (traz coordenadas de alta precisão)
+          if ((!latitude || !longitude) && zipCode && zipCode.length === 8) {
+            try {
+              const cepRes = await fetch(`https://brasilapi.com.br/api/cep/v2/${zipCode}`);
+              if (cepRes.ok) {
+                const cepJson = await cepRes.json();
+                if (cepJson.location?.coordinates?.latitude && cepJson.location?.coordinates?.longitude) {
+                  latitude = Number(cepJson.location.coordinates.latitude);
+                  longitude = Number(cepJson.location.coordinates.longitude);
+                }
+              }
+            } catch (e) {
+              // Segue
+            }
+          }
+
+          // Tentativa 3: Cidade + UF
+          if ((!latitude || !longitude) && city && state) {
+            try {
+              const qCity = encodeURIComponent(`${city}, ${state}, Brasil`);
+              const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${qCity}&format=json&limit=1`, {
+                headers: { 'User-Agent': 'SafyraSafety/1.0 (comercial@safyrasafety.com.br)' }
+              });
+              if (geoRes.ok) {
+                const geo = await geoRes.json();
+                if (geo && geo.length > 0) {
+                  latitude = parseFloat(geo[0].lat);
+                  longitude = parseFloat(geo[0].lon);
+                }
+              }
+            } catch (e) {
+              // Segue
+            }
+          }
+        }
+
+        // Salvar alterações no Supabase
+        if (latitude != null && longitude != null) {
+          const updatePayload: any = {
+            latitude,
+            longitude,
+          };
+          if (address && !client.address) updatePayload.address = address;
+          if (number && !client.address_number) updatePayload.address_number = number;
+          if (neighborhood && !client.neighborhood) updatePayload.neighborhood = neighborhood;
+          if (city && !client.city) updatePayload.city = city;
+          if (state && !client.state) updatePayload.state = state;
+          if (zipCode && !client.zip_code) updatePayload.zip_code = zipCode;
+
+          const { error: updateError } = await supabase
+            .from("clients")
+            .update(updatePayload)
+            .eq("id", client.id);
+
+          if (updateError) {
+            failedCount++;
+            results.push({ name: client.name || client.legal_name, status: "error" });
+          } else {
+            updatedCount++;
+            results.push({ name: client.name || client.legal_name, city, state, lat: latitude, lng: longitude, status: "updated" });
+          }
+        } else {
+          skippedCount++;
+          results.push({ name: client.name || client.legal_name, status: "no_coords_found" });
+        }
+
+        // Pequena pausa para respeitar o rate-limit das APIs públicas (150ms)
+        await new Promise((r) => setTimeout(r, 150));
+      } catch (err) {
+        failedCount++;
+        results.push({ name: client.name || client.legal_name, status: "failed" });
+      }
+    }
 
     return {
       success: true,
-      migrationSummary,
-      totalClientsRemaining: remainingClients?.length,
-      totalOrdersRemaining: totalOrders?.length,
-      totalOrderAmount: totalAmount
+      total: validClients.length,
+      updated: updatedCount,
+      skipped: skippedCount,
+      failed: failedCount,
+      results,
     };
   });
 

@@ -1,11 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Client } from "@/types/database.types";
+import { enrichClientsWithOrderMetrics } from "./client-metrics.utils";
+import { PREDEFINED_REGIONS } from "./regions.services";
 
 export interface ClientFilters {
   search?: string;
   status?: string;
   segment?: string;
   state?: string;
+  city?: string;
+  region?: string;
   page?: number;
   pageSize?: number;
 }
@@ -22,7 +26,7 @@ export function isUuid(value: string): boolean {
 export async function getClients(
   filters: ClientFilters = {},
 ): Promise<{ data: any[]; count: number }> {
-  const { search = "", status = "all", page = 0, pageSize = 10 } = filters;
+  const { search = "", status = "all", state, city, region, page = 0, pageSize = 10 } = filters;
   const term = search.toLowerCase().trim();
 
   let dbClients: any[] = [];
@@ -34,6 +38,27 @@ export async function getClients(
   } catch (err) {
     console.warn("Supabase clients fetch error:", err);
   }
+
+  let dbOrders: any[] = [];
+  try {
+    const { data: orders, error } = await supabase
+      .from("orders")
+      .select("id, client_id, total_amount, created_at, status")
+      .not("client_id", "is", null);
+
+    if (!error && orders) {
+      dbOrders = orders;
+    }
+  } catch (err) {
+    console.warn("Supabase orders fetch error:", err);
+  }
+
+  const enrichedClients = enrichClientsWithOrderMetrics(dbClients, dbOrders);
+
+  dbClients = enrichedClients.map((client) => ({
+    ...client,
+    last_order_at: client.lastOrderDate || null,
+  }));
 
   let filtered = dbClients.filter((c) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14));
 
@@ -68,6 +93,41 @@ export async function getClients(
     filtered = filtered.filter((c) => c.status === status);
   }
 
+  if (state && state !== "all") {
+    filtered = filtered.filter(
+      (c) => String(c.state || "").toUpperCase().trim() === state.toUpperCase().trim()
+    );
+  }
+
+  if (city && city !== "all") {
+    filtered = filtered.filter(
+      (c) => String(c.city || "").toLowerCase().trim() === city.toLowerCase().trim()
+    );
+  }
+
+  if (region && region !== "all") {
+    const targetRegion = PREDEFINED_REGIONS.find((r) => r.id === region);
+    if (targetRegion) {
+      const regCities = targetRegion.cities.map((c) => c.toLowerCase().trim());
+      const regStates = targetRegion.statesCovered.map((s) => s.toUpperCase().trim());
+
+      filtered = filtered.filter((c) => {
+        const clientCity = String(c.city || "").toLowerCase().trim();
+        const clientState = String(c.state || "").toUpperCase().trim();
+
+        const cityMatch = regCities.some(
+          (rc) => clientCity.includes(rc) || rc.includes(clientCity)
+        );
+        const stateMatch = regStates.includes(clientState);
+
+        if (targetRegion.id === "reg-go-metropolitana" || targetRegion.id === "reg-go-sul-sudoeste") {
+          return clientState === "GO" && (cityMatch || targetRegion.cities.includes(c.city));
+        }
+        return cityMatch || (regCities.length === 0 && stateMatch);
+      });
+    }
+  }
+
   const totalCount = filtered.length;
   const start = page * pageSize;
   const paginated = filtered.slice(start, start + pageSize);
@@ -96,7 +156,7 @@ export async function getClientById(id: string): Promise<any | null> {
 }
 
 /**
- * Busca estatísticas agregadas da carteira de clientes
+ * Busca estatísticas agregadas da carteira de clientes (apenas com CNPJ válido)
  */
 export async function getClientsStats() {
   let dbClients: any[] = [];
@@ -109,10 +169,21 @@ export async function getClientsStats() {
 
   const allClients = dbClients.filter((c) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14));
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const newClientsMonth = allClients.filter((c) => {
+    if (!c.created_at) return false;
+    const createdAt = new Date(c.created_at);
+    return createdAt.getFullYear() === currentYear && createdAt.getMonth() === currentMonth;
+  }).length;
+
   return {
     total: allClients.length,
     active: allClients.filter((c) => c.status === "active").length,
     prospect: allClients.filter((c) => c.status === "prospect").length,
+    newThisMonth: newClientsMonth,
   };
 }
 
@@ -168,12 +239,29 @@ const CITY_FALLBACK_COORDS: Record<string, { lat: number; lng: number }> = {
   palmas: { lat: -10.1844, lng: -48.3336 },
 };
 
+// Função determinística para gerar deslocamento (jitter) suave em clientes com mesma cidade
+function getDeterministicOffset(str: string, index: number) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const angle = ((Math.abs(hash) + index * 137.5) % 360) * (Math.PI / 180);
+  // Raio de dispersão urbano entre 500m e 3.5km (~0.005 a 0.030 graus)
+  const radius = 0.006 + ((Math.abs(hash * 31) % 100) / 100) * 0.018;
+  return {
+    dLat: Math.sin(angle) * radius,
+    dLng: Math.cos(angle) * radius * 1.05,
+  };
+}
+
 /**
  * Busca todos os clientes com coordenadas geográficas para uso no Google Maps e Roteirização
  */
-export async function getMapClients(search?: string): Promise<any[]> {
-  const result = await getClients({ search, pageSize: 500 });
-  return result.data.map((c) => {
+export async function getMapClients(filters: ClientFilters | string = {}): Promise<any[]> {
+  const normalizedFilters: ClientFilters = typeof filters === 'string' ? { search: filters } : filters;
+  const result = await getClients({ ...normalizedFilters, pageSize: 1500 });
+  return result.data.map((c, idx) => {
     if (c.latitude != null && c.longitude != null) {
       return c;
     }
@@ -181,10 +269,12 @@ export async function getMapClients(search?: string): Promise<any[]> {
       .toLowerCase()
       .trim();
     const fallback = CITY_FALLBACK_COORDS[cityKey] || CITY_FALLBACK_COORDS["goiânia"];
+    const offset = getDeterministicOffset(c.id || c.name, idx);
+
     return {
       ...c,
-      latitude: fallback.lat,
-      longitude: fallback.lng,
+      latitude: fallback.lat + offset.dLat,
+      longitude: fallback.lng + offset.dLng,
     };
   });
 }

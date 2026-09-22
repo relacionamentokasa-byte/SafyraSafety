@@ -23,6 +23,7 @@ import { useState, useDeferredValue } from 'react';
 import { OrderStatus } from '@/types/database.types';
 import { cn } from '@/lib/utils';
 import { ManufacturerLogo } from '@/components/manufacturers/ManufacturerLogo';
+import { resolveOrderManufacturer } from '@/lib/order-manufacturers.utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { deleteOrderPermanentlyDirect } from '@/lib/orders.services';
 import { formatClientDisplayName } from '@/lib/format-name';
@@ -100,8 +101,8 @@ function OrdersPage() {
   // Estados dos filtros - Padrão inteligente: Mês e Ano correntes
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [manufacturerFilter, setManufacturerFilter] = useState<string>('all');
-  const [monthFilter, setMonthFilter] = useState<string>(String(currentMonthNum));
-  const [yearFilter, setYearFilter] = useState<string>(String(currentYearNum));
+  const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>('all');
 
   const [orderToDelete, setOrderToDelete] = useState<{ id: string; order_number: string } | null>(null);
   const queryClient = useQueryClient();
@@ -159,16 +160,45 @@ function OrdersPage() {
         .select(`
           *,
           client:clients(id, name, trade_name, legal_name),
-          representative:representatives(id, name, photo_url, user_id)
+          representative:representatives(id, name, photo_url, user_id),
+          items:order_items(
+            id,
+            product_name_snapshot,
+            product_sku_snapshot,
+            product:products(
+              id,
+              name,
+              sku,
+              manufacturer_id,
+              manufacturer:manufacturers(id, name, logo_path)
+            )
+          )
         `, { count: 'exact' })
         .order('created_at', { ascending: false });
 
       if (deferredSearch) {
-        query = query.or(`order_number.ilike.%${deferredSearch}%,client_name.ilike.%${deferredSearch}%`);
+        query = query.or(`order_number.ilike.%${deferredSearch}%,billing_notes.ilike.%${deferredSearch}%`);
       }
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter as any);
+      }
+
+      // Filtro por Fabricante
+      if (manufacturerFilter !== 'all') {
+        const selectedMfg = manufacturers?.find(m => m.id === manufacturerFilter);
+        if (selectedMfg) {
+          const mfgName = selectedMfg.name.toUpperCase();
+          if (mfgName.includes('LIBUS')) {
+            query = query.or('order_number.ilike.%S2%,order_number.ilike.%LIB%,billing_notes.ilike.%Libus%');
+          } else if (mfgName.includes('NUTRIEX')) {
+            query = query.or('order_number.ilike.%NUT%,order_number.ilike.%PED-2%,billing_notes.ilike.%conferir as mercadorias%');
+          } else if (mfgName.includes('MEDIX')) {
+            query = query.or('order_number.ilike.%MED%,billing_notes.ilike.%Medix%');
+          } else if (mfgName.includes('VOLK')) {
+            query = query.or('order_number.ilike.%VOL%,billing_notes.ilike.%Volk%');
+          }
+        }
       }
 
       // Filtro por Mês e Ano
@@ -202,6 +232,14 @@ function OrdersPage() {
     staleTime: 1000 * 60 * 2,
   });
 
+  const getOrderManufacturerInfo = (order: any): { name: string; logoPath?: string } => {
+    const mfg = resolveOrderManufacturer(order, manufacturers || []);
+    return {
+      name: mfg.name,
+      logoPath: mfg.logo_path || undefined,
+    };
+  };
+
   const orders = ordersData?.data || [];
   const totalCount = ordersData?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -234,14 +272,28 @@ function OrdersPage() {
           </Button>
         </div>
 
-        {/* Barra de Filtro de Competência Rápida (Mês / Ano) */}
+        {/* Barra de Filtro de Competência Rápida (Mês / Ano / Indústria) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-              Competência:
+              Filtros:
             </span>
+            <Select value={manufacturerFilter} onValueChange={(v) => { setManufacturerFilter(v); setPage(0); }}>
+              <SelectTrigger className="h-9 flex-1 sm:w-[170px] text-xs font-medium bg-slate-50 border-slate-200">
+                <SelectValue placeholder="Todas as Indústrias" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as Indústrias</SelectItem>
+                {manufacturers?.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={monthFilter} onValueChange={(v) => { setMonthFilter(v); setPage(0); }}>
-              <SelectTrigger className="h-9 flex-1 sm:w-[150px] text-xs font-medium bg-slate-50 border-slate-200">
+              <SelectTrigger className="h-9 flex-1 sm:w-[140px] text-xs font-medium bg-slate-50 border-slate-200">
                 <SelectValue placeholder="Mês" />
               </SelectTrigger>
               <SelectContent>
@@ -268,24 +320,31 @@ function OrdersPage() {
               </SelectContent>
             </Select>
 
-            {(monthFilter !== String(currentMonthNum) || yearFilter !== String(currentYearNum)) && (
+            {(monthFilter !== 'all' || yearFilter !== 'all' || manufacturerFilter !== 'all') && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 text-xs text-slate-500 hover:text-slate-900 w-full sm:w-auto justify-center"
                 onClick={() => {
-                  setMonthFilter(String(currentMonthNum));
-                  setYearFilter(String(currentYearNum));
+                  setMonthFilter('all');
+                  setYearFilter('all');
+                  setManufacturerFilter('all');
                   setPage(0);
                 }}
               >
-                Voltar para Mês Atual
+                Limpar Filtros
               </Button>
             )}
           </div>
 
           <div className="text-xs text-slate-500 font-mono">
-            {monthFilter !== 'all' ? `${MONTH_NAMES[Number(monthFilter) - 1]} / ${yearFilter !== 'all' ? yearFilter : currentYearNum}` : `Ano ${yearFilter}`} • {totalCount} {totalCount === 1 ? 'pedido listado' : 'pedidos listados'}
+            {monthFilter !== 'all' && yearFilter !== 'all'
+              ? `${MONTH_NAMES[Number(monthFilter) - 1]} / ${yearFilter}`
+              : monthFilter !== 'all'
+              ? `${MONTH_NAMES[Number(monthFilter) - 1]}`
+              : yearFilter !== 'all'
+              ? `Ano ${yearFilter}`
+              : 'Histórico Completo'} • {totalCount} {totalCount === 1 ? 'pedido listado' : 'pedidos listados'}
           </div>
         </div>
 
@@ -479,6 +538,7 @@ function OrdersPage() {
                     <TableHeader>
                       <TableRow className="bg-muted/40 hover:bg-muted/40">
                         <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Número</TableHead>
+                        <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Fabricante / Indústria</TableHead>
                         <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cliente</TableHead>
                         <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Representante</TableHead>
                         <TableHead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Data de Emissão</TableHead>
@@ -490,6 +550,7 @@ function OrdersPage() {
                     <TableBody>
                       {orders.map((order) => {
                         const style = statusStyles[order.status as OrderStatus] || statusStyles.draft;
+                        const mfg = getOrderManufacturerInfo(order);
 
                         return (
                           <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
@@ -497,6 +558,23 @@ function OrdersPage() {
                               <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted">
                                 {order.order_number}
                               </span>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {mfg ? (
+                                <div className="flex items-center gap-2">
+                                  <ManufacturerLogo
+                                    name={mfg.name}
+                                    logoPath={mfg.logoPath}
+                                    size="xs"
+                                    className="h-6 w-6 rounded border border-slate-200 shrink-0"
+                                  />
+                                  <span className="font-semibold text-slate-900 truncate max-w-[150px]" title={mfg.name}>
+                                    {mfg.name}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 font-medium">-</span>
+                              )}
                             </TableCell>
                             <TableCell className="font-medium text-xs text-foreground">
                               {order.client ? formatClientDisplayName(order.client) : '-'}
@@ -550,6 +628,7 @@ function OrdersPage() {
                   {orders.map((order) => {
                     const style = statusStyles[order.status as OrderStatus] || statusStyles.draft;
                     const clientName = order.client ? formatClientDisplayName(order.client) : 'Cliente sem identificação';
+                    const mfg = getOrderManufacturerInfo(order);
 
                     return (
                       <div key={order.id} className="p-3.5 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-2.5">
@@ -559,6 +638,19 @@ function OrdersPage() {
                               <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80">
                                 {order.order_number}
                               </span>
+                              {mfg && (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                                  <ManufacturerLogo
+                                    name={mfg.name}
+                                    logoPath={mfg.logoPath}
+                                    size="xs"
+                                    className="h-3.5 w-3.5 rounded-xs"
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-700 truncate max-w-[120px]">
+                                    {mfg.name}
+                                  </span>
+                                </div>
+                              )}
                               <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
                                 {style.label}
                               </span>

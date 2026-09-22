@@ -398,13 +398,13 @@ function CommissionsPage() {
                 size="sm"
                 className="h-9.5 w-full text-xs font-semibold"
                 onClick={() => {
-                  setSelectedMonth(String(currentDate.getMonth() + 1));
-                  setSelectedYear(String(currentDate.getFullYear()));
+                  setSelectedMonth('all');
+                  setSelectedYear('all');
                   setStatusFilter('all');
                   setManufacturerFilter('all');
                 }}
               >
-                Mês Atual / Limpar
+                Limpar Filtros
               </Button>
             </div>
           </div>

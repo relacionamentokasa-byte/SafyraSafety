@@ -21,9 +21,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, MapPin, Sparkles } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getCompanyByCnpj } from "@/lib/cnpj.functions";
+import { getAddressByCep, geocodeAddress } from "@/lib/geocoding.functions";
 import { createClient, updateClient } from "@/lib/clients.functions";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -103,8 +104,12 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("company");
   const [isSearchingCnpj, setIsSearchingCnpj] = useState(false);
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const searchCnpj = useServerFn(getCompanyByCnpj);
+  const searchCep = useServerFn(getAddressByCep);
+  const getCoordinates = useServerFn(geocodeAddress);
   const saveClient = useServerFn(createClient);
   const editClient = useServerFn(updateClient);
 
@@ -240,8 +245,12 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
         form.setValue("state", (data.state as any) || "");
         form.setValue("email", data.email || "");
         form.setValue("phone", data.phone || "");
+        if (data.latitude && data.longitude) {
+          form.setValue("latitude", data.latitude);
+          form.setValue("longitude", data.longitude);
+        }
 
-        toast.success("Dados da empresa localizados com sucesso!");
+        toast.success("Dados da empresa e localização preenchidos com sucesso!");
       } else {
         toast.error(result.message || "CNPJ não localizado");
       }
@@ -249,6 +258,78 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
       toast.error("Erro ao buscar CNPJ: " + error.message);
     } finally {
       setIsSearchingCnpj(false);
+    }
+  };
+
+  const handleSearchCep = async () => {
+    const cepValue = form.getValues("cep");
+    if (!cepValue) {
+      toast.error("Digite um CEP para buscar");
+      return;
+    }
+    const cleanCep = cepValue.replace(/\D/g, "");
+    if (cleanCep.length !== 8) {
+      toast.error("CEP deve conter 8 números");
+      return;
+    }
+
+    try {
+      setIsSearchingCep(true);
+      const result = await searchCep({ data: { cep: cleanCep } });
+      if (result.success && result.data) {
+        const data = result.data;
+        if (data.address) form.setValue("address", data.address);
+        if (data.neighborhood) form.setValue("neighborhood", data.neighborhood);
+        if (data.city) form.setValue("city", data.city);
+        if (data.state) form.setValue("state", data.state);
+        if (data.latitude && data.longitude) {
+          form.setValue("latitude", data.latitude);
+          form.setValue("longitude", data.longitude);
+          toast.success("Endereço e coordenadas GPS localizados!");
+        } else {
+          toast.success("Endereço preenchido!");
+        }
+      } else {
+        toast.error(result.message || "CEP não localizado");
+      }
+    } catch (err: any) {
+      toast.error("Erro ao buscar CEP: " + err.message);
+    } finally {
+      setIsSearchingCep(false);
+    }
+  };
+
+  const handleGeocodeCurrentAddress = async () => {
+    const city = form.getValues("city");
+    const state = form.getValues("state");
+    if (!city || !state) {
+      toast.error("Preencha ao menos a Cidade e o Estado (UF) para obter as coordenadas.");
+      return;
+    }
+
+    try {
+      setIsGeocoding(true);
+      const result = await getCoordinates({
+        data: {
+          address: form.getValues("address") || undefined,
+          number: form.getValues("number") || undefined,
+          neighborhood: form.getValues("neighborhood") || undefined,
+          city,
+          state,
+        }
+      });
+
+      if (result.success && result.latitude && result.longitude) {
+        form.setValue("latitude", result.latitude);
+        form.setValue("longitude", result.longitude);
+        toast.success(`Coordenadas GPS capturadas: ${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`);
+      } else {
+        toast.error(result.message || "Não foi possível obter coordenadas para este endereço");
+      }
+    } catch (err: any) {
+      toast.error("Erro ao buscar coordenadas: " + err.message);
+    } finally {
+      setIsGeocoding(false);
     }
   };
 
@@ -427,10 +508,10 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
       <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 lg:grid-cols-4">
-            <TabsTrigger value="company">Empresa</TabsTrigger>
-            <TabsTrigger value="contact">Contato</TabsTrigger>
-            <TabsTrigger value="address">Endereço</TabsTrigger>
-            <TabsTrigger value="commercial">Comercial</TabsTrigger>
+            <TabsTrigger value="company" type="button">Empresa</TabsTrigger>
+            <TabsTrigger value="contact" type="button">Contato</TabsTrigger>
+            <TabsTrigger value="address" type="button">Endereço</TabsTrigger>
+            <TabsTrigger value="commercial" type="button">Comercial</TabsTrigger>
           </TabsList>
 
           <TabsContent value="company">
@@ -670,8 +751,28 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
 
           <TabsContent value="address">
             <Card>
-              <CardHeader>
-                <CardTitle>Endereço e Localização</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Endereço e Localização</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Preencha o CEP ou endereço para busca automática de coordenadas GPS
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGeocodeCurrentAddress}
+                  disabled={isGeocoding}
+                  className="gap-1.5 text-xs h-8"
+                >
+                  {isGeocoding ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                  )}
+                  Capturar Coordenadas GPS
+                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -681,9 +782,29 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>CEP</FormLabel>
-                        <FormControl>
-                          <Input placeholder="00000-000" {...field} />
-                        </FormControl>
+                        <div className="flex gap-2">
+                          <FormControl>
+                            <Input
+                              placeholder="00000-000"
+                              {...field}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSearchCep();
+                                }
+                              }}
+                            />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={handleSearchCep}
+                            disabled={isSearchingCep}
+                            title="Buscar endereço por CEP"
+                          >
+                            {isSearchingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                          </Button>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -781,9 +902,22 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
                     name="latitude"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Latitude (Opcional)</FormLabel>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <span>Latitude</span>
+                          {field.value != null && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.5 rounded font-mono font-medium">
+                              Definida
+                            </span>
+                          )}
+                        </FormLabel>
                         <FormControl>
-                          <Input type="number" step="any" placeholder="-16.6869" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
+                          <Input
+                            type="number"
+                            step="any"
+                            placeholder="-16.6869"
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -794,9 +928,22 @@ export function ClientForm({ initialData, clientId, onSuccess }: ClientFormProps
                     name="longitude"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Longitude (Opcional)</FormLabel>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <span>Longitude</span>
+                          {field.value != null && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.5 rounded font-mono font-medium">
+                              Definida
+                            </span>
+                          )}
+                        </FormLabel>
                         <FormControl>
-                          <Input type="number" step="any" placeholder="-49.2648" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
+                          <Input
+                            type="number"
+                            step="any"
+                            placeholder="-49.2648"
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

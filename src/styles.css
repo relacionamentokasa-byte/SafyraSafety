@@ -164,3 +164,42 @@
 #lovable-badge {
   display: none !important;
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  header, nav, aside, footer:not(.print-footer), .no-print, [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr, .avoid-break {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+}
+

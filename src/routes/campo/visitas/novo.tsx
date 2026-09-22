@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useState } from "react";
 import { getClients, ensureClientInDatabase, isUuid } from "@/lib/clients.services";
+import { formatDisplayName } from "@/lib/format-name";
 
 function parseLocalDateTime(value: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
@@ -196,11 +197,19 @@ function NewVisitPage() {
                   {...register("client_id")}
                 >
                   <option value="">Selecione um cliente</option>
-                  {clients?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  {clients?.map((c) => {
+                    const loc = [c.city, c.state].filter(Boolean).join(" - ");
+                    const cnpjFormatted = c.cnpj && c.cnpj.length === 14
+                      ? c.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+                      : c.cnpj;
+                    const details = [loc, cnpjFormatted].filter(Boolean).join(" • ");
+                    const displayName = formatDisplayName(c.name || c.legal_name || c.trade_name);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {displayName}{details ? ` (${details})` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
                 {errors.client_id && (
                   <p className="text-xs text-destructive">{errors.client_id.message}</p>

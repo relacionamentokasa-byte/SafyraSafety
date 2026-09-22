@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getClients } from '@/lib/clients.services';
+import { calculateClientCommercialStatus } from '@/lib/client-metrics.utils';
 
 export interface CityMetric {
   name: string;
@@ -204,7 +205,7 @@ export async function getDetailedRegionalAnalytics(): Promise<{
 
   const now = new Date();
 
-  // Enriquecer cada cliente com métricas financeiras e dias desde a última compra
+  // Enriquecer cada cliente com métricas financeiras e dias desde a última compra usando a regra centralizada
   const clientsWithMetrics: ClientRegionalHighlight[] = allClients.map(c => {
     const metrics = clientRevenueMap.get(c.id) || {
       totalRevenue: 0,
@@ -213,20 +214,8 @@ export async function getDetailedRegionalAnalytics(): Promise<{
       commissionTotal: 0
     };
 
-    let daysSinceLastOrder = 999;
-    let status: 'active' | 'warning' | 'churn' = 'churn';
-
-    if (metrics.lastOrderDate) {
-      const diffMs = now.getTime() - new Date(metrics.lastOrderDate).getTime();
-      daysSinceLastOrder = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
-      if (daysSinceLastOrder <= 60) {
-        status = 'active';
-      } else if (daysSinceLastOrder <= 120) {
-        status = 'warning';
-      } else {
-        status = 'churn';
-      }
-    }
+    const { status: commStatus, daysSinceLastOrder } = calculateClientCommercialStatus(metrics.lastOrderDate, now);
+    const status: 'active' | 'warning' | 'churn' = commStatus === 'active' ? 'active' : commStatus === 'warning' ? 'warning' : 'churn';
 
     return {
       id: c.id,
@@ -238,7 +227,7 @@ export async function getDetailedRegionalAnalytics(): Promise<{
       totalRevenue: metrics.totalRevenue,
       ordersCount: metrics.ordersCount,
       lastOrderDate: metrics.lastOrderDate,
-      daysSinceLastOrder: metrics.lastOrderDate ? daysSinceLastOrder : undefined,
+      daysSinceLastOrder,
       status
     };
   });

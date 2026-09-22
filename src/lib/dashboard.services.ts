@@ -201,7 +201,7 @@ export async function getDashboardData(): Promise<DashboardRealStats> {
     totalClients: clientStats.total,
     pendingVisits,
     completedVisits,
-    newClientsMonth: 0,
+    newClientsMonth: clientStats.newThisMonth || 0,
     salesByPeriod,
     commissionForecast: {
       currentMonthTotal: currentForecast.totalForecast,
