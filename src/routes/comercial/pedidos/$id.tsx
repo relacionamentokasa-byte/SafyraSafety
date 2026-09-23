@@ -39,6 +39,7 @@ import { formatDisplayName } from '@/lib/format';
 import { formatClientDisplayName } from '@/lib/format-name';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
 import { OrderPrintTemplate } from '@/components/pedidos/OrderPrintTemplate';
+import { extractPurchaseOrderNumber } from '@/lib/orders.utils';
 import type { Json } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -352,6 +353,21 @@ function OrderDetailsPage() {
                 <span className="font-mono text-xl md:text-2xl font-black tracking-tight text-foreground bg-muted/60 px-3 py-1 rounded-lg border">
                   {order.order_number}
                 </span>
+                {(() => {
+                  const poNumber = extractPurchaseOrderNumber(order);
+                  if (!poNumber) return null;
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-md shadow-2xs"
+                      title={`Ordem de Compra / Pedido da Indústria: ${poNumber}`}
+                    >
+                      <span className="text-[10px] font-extrabold uppercase px-1 py-0.2 bg-emerald-200/80 text-emerald-900 rounded">
+                        OC
+                      </span>
+                      {poNumber}
+                    </span>
+                  );
+                })()}
                 {(() => {
                   const badge = statusBadges[order.status as OrderStatus] || { label: order.status };
                   return (

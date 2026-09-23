@@ -210,6 +210,7 @@ export interface Order {
   commercial_notes?: string;
   internal_notes?: string;
   billing_notes?: string;
+  purchase_order_number?: string;
   cancellation_reason?: string;
   rejection_reason?: string;
 

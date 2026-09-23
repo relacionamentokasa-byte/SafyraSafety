@@ -33,6 +33,7 @@ import { UploadCloud } from 'lucide-react';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
 import { FieldQuickActions } from '@/components/common/FieldQuickActions';
 import { toast } from 'sonner';
+import { extractPurchaseOrderNumber } from '@/lib/orders.utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -669,6 +670,7 @@ function OrdersPage() {
                       {orders.map((order) => {
                         const style = statusStyles[order.status as OrderStatus] || statusStyles.draft;
                         const mfg = getOrderManufacturerInfo(order);
+                        const poNumber = extractPurchaseOrderNumber(order);
 
                         return (
                           <TableRow
@@ -677,9 +679,16 @@ function OrdersPage() {
                             className="hover:bg-muted/50 transition-colors cursor-pointer group"
                           >
                             <TableCell className="font-semibold text-foreground">
-                              <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                {order.order_number}
-                              </span>
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors font-bold">
+                                  {order.order_number}
+                                </span>
+                                {poNumber && (
+                                  <span className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded" title={`Ordem de Compra: ${poNumber}`}>
+                                    <span className="text-[9px] font-bold opacity-75">OC</span> {poNumber}
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-xs">
                               {mfg ? (
@@ -751,15 +760,21 @@ function OrdersPage() {
                     const style = statusStyles[order.status as OrderStatus] || statusStyles.draft;
                     const clientName = order.client ? formatClientDisplayName(order.client) : 'Cliente sem identificação';
                     const mfg = getOrderManufacturerInfo(order);
+                    const poNumber = extractPurchaseOrderNumber(order);
 
                     return (
                       <div key={order.id} className="p-3.5 bg-white hover:bg-slate-50/50 transition-colors flex flex-col gap-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200/80">
                                 {order.order_number}
                               </span>
+                              {poNumber && (
+                                <span className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-bold opacity-75">OC</span> {poNumber}
+                                </span>
+                              )}
                               {mfg && (
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
                                   <ManufacturerLogo

@@ -200,6 +200,23 @@ export function ReviewStep() {
 
         <div className="space-y-5">
           <div className="space-y-2">
+            <Label htmlFor="purchase-order-number" className="flex items-center gap-1.5 font-semibold text-slate-800">
+              <span>Nº da Ordem de Compra (OC / Indústria)</span>
+              <span className="text-xs font-normal text-muted-foreground">(Opcional)</span>
+            </Label>
+            <input
+              id="purchase-order-number"
+              type="text"
+              placeholder="Ex: 32653, OC-9842..."
+              className="flex h-9.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none focus:ring-1 focus:ring-ring font-mono"
+              {...register("purchase_order_number")}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Número da Ordem de Compra fornecido pelo cliente ou pela indústria para faturamento.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="expected-delivery-date">Data de entrega estimada</Label>
             <input
               id="expected-delivery-date"

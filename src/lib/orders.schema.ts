@@ -24,6 +24,7 @@ export const orderFormSchema = z.object({
   payment_plan_id: z.string().uuid("Selecione uma condição de pagamento"),
 
   price_table_id: z.string().optional(),
+  purchase_order_number: z.string().optional(),
   idempotency_key: z.string().min(8).optional(),
   expected_delivery_date: z.string().optional(),
   commercial_notes: z.string().optional(),

@@ -559,7 +559,10 @@ export const createOrderWithRpc = async (
     expected_delivery_date: values.expected_delivery_date || undefined,
     commercial_notes: values.commercial_notes?.trim() || undefined,
     internal_notes: values.internal_notes?.trim() || undefined,
-    billing_notes: values.billing_notes?.trim() || undefined,
+    billing_notes: [
+      values.purchase_order_number?.trim() ? `OC: ${values.purchase_order_number.trim()}` : null,
+      values.billing_notes?.trim() || null
+    ].filter(Boolean).join(" | ") || undefined,
     items: values.items.map((item) => ({
       product_id: item.product_id,
       price_table_item_id: item.price_table_item_id,
@@ -614,6 +617,11 @@ export const createOrderWithLegacySchema = async (
   let orderId: string | null = null;
 
   try {
+    const billingNotesCombined = [
+      values.purchase_order_number?.trim() ? `OC: ${values.purchase_order_number.trim()}` : null,
+      values.billing_notes?.trim() || null
+    ].filter(Boolean).join(" | ") || null;
+
     const orderInsert: LegacyOrderInsert = {
       client_id: clientId,
       representative_id: values.representative_id,
@@ -628,7 +636,7 @@ export const createOrderWithLegacySchema = async (
       expected_delivery_date: expectedDeliveryDate ?? null,
       commercial_notes: values.commercial_notes?.trim() || null,
       internal_notes: values.internal_notes?.trim() || null,
-      billing_notes: values.billing_notes?.trim() || null,
+      billing_notes: billingNotesCombined,
       origin: "Web",
       created_by: user.id,
       updated_by: user.id,

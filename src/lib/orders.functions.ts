@@ -57,7 +57,7 @@ export const fetchOrdersServer = createServerFn({ method: "POST" })
       .order('created_at', { ascending: false });
 
     if (search) {
-      query = query.or(`order_number.ilike.%${search}%,billing_notes.ilike.%${search}%`);
+      query = query.or(`order_number.ilike.%${search}%,billing_notes.ilike.%${search}%,commercial_notes.ilike.%${search}%,internal_notes.ilike.%${search}%`);
     }
 
     if (status !== 'all') {
@@ -130,7 +130,7 @@ export const fetchOrdersServer = createServerFn({ method: "POST" })
       .select('total_amount, status, created_at, order_number, billing_notes');
 
     if (search) {
-      statsQuery = statsQuery.or(`order_number.ilike.%${search}%,billing_notes.ilike.%${search}%`);
+      statsQuery = statsQuery.or(`order_number.ilike.%${search}%,billing_notes.ilike.%${search}%,commercial_notes.ilike.%${search}%,internal_notes.ilike.%${search}%`);
     }
 
     if (manufacturerId !== 'all') {

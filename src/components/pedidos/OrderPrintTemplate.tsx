@@ -5,6 +5,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/format";
 import { formatClientDisplayName } from "@/lib/format-name";
 import { formatPaymentPlanSchedule } from "@/lib/payment-plans";
+import { extractPurchaseOrderNumber } from "@/lib/orders.utils";
 import { OrderStatus } from "@/types/database.types";
 
 interface OrderPrintTemplateProps {
@@ -102,6 +103,16 @@ export function OrderPrintTemplate({ order, companySettings }: OrderPrintTemplat
           <div className="text-right border border-slate-300 bg-slate-50 rounded-lg p-2.5 min-w-[200px]">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Pedido de Venda</span>
             <span className="font-mono text-xl font-black text-slate-900 block my-0.5">{order.order_number}</span>
+            {(() => {
+              const poNumber = extractPurchaseOrderNumber(order);
+              if (!poNumber) return null;
+              return (
+                <div className="my-1 py-0.5 px-2 bg-emerald-50 border border-emerald-300 rounded text-center">
+                  <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider block">Ordem de Compra (OC)</span>
+                  <span className="font-mono text-xs font-black text-emerald-900">{poNumber}</span>
+                </div>
+              );
+            })()}
             <div className="flex items-center justify-end gap-1.5 mt-1">
               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-800">
                 {statusLabels[order.status] || order.status}
