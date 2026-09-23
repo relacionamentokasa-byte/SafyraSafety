@@ -7,9 +7,9 @@ import { Calendar, User, DollarSign, Clock, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getCrmStages } from '@/lib/crm.services';
 import { formatClientDisplayName } from '@/lib/format-name';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
+import { getCrmStages, updateOpportunityStageServer } from '@/lib/crm.services';
 
 interface KanbanBoardProps {
   searchTerm?: string;
@@ -70,11 +70,7 @@ export function KanbanBoard({ searchTerm, stageFilter, dateFilter }: KanbanBoard
 
   const moveOpportunity = useMutation({
     mutationFn: async ({ id, stageId }: { id: string, stageId: string }) => {
-      const { error } = await supabase
-        .from('opportunities')
-        .update({ stage_id: stageId, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
+      return await updateOpportunityStageServer({ data: { id, stageId } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities-kanban'] });

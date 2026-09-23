@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { CRMStage } from "@/types/database.types";
+import { createServerFn } from "@tanstack/react-start";
 
 export const DEFAULT_CRM_STAGES: CRMStage[] = [
   {
@@ -70,3 +71,87 @@ export async function getCrmStages(): Promise<CRMStage[]> {
     return DEFAULT_CRM_STAGES;
   }
 }
+
+/**
+ * Server function para criar oportunidade com Service Role / Auth
+ * Evita bloqueios de RLS no frontend
+ */
+export const createOpportunityServer = createServerFn({ method: "POST" })
+  .validator((data: {
+    title: string;
+    client_id: string;
+    representative_id: string;
+    stage_id: string;
+    estimated_value?: number;
+    probability?: number;
+    origin: string;
+    expected_closing_date?: string | null;
+    description?: string | null;
+  }) => data)
+  .handler(async ({ data }) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      supabaseKey,
+      { auth: { persistSession: false } }
+    );
+
+    const { data: inserted, error } = await supabaseAdmin
+      .from('opportunities')
+      .insert([{
+        title: data.title,
+        client_id: data.client_id,
+        representative_id: data.representative_id,
+        stage_id: data.stage_id,
+        estimated_value: data.estimated_value || 0,
+        probability: data.probability ?? 50,
+        origin: data.origin,
+        expected_closing_date: data.expected_closing_date || null,
+        description: data.description || null,
+        status: 'open',
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[createOpportunityServer] Erro ao criar oportunidade:", error);
+      throw new Error(error.message || "Erro ao criar oportunidade no banco.");
+    }
+
+    return inserted;
+  });
+
+/**
+ * Server function para mover oportunidade entre etapas (Drag & Drop / Kanban)
+ */
+export const updateOpportunityStageServer = createServerFn({ method: "POST" })
+  .validator((data: { id: string; stageId: string }) => data)
+  .handler(async ({ data }) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      supabaseKey,
+      { auth: { persistSession: false } }
+    );
+
+    const { error } = await supabaseAdmin
+      .from('opportunities')
+      .update({
+        stage_id: data.stageId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', data.id);
+
+    if (error) {
+      console.error("[updateOpportunityStageServer] Erro ao atualizar etapa:", error);
+      throw new Error(error.message || "Erro ao mover oportunidade.");
+    }
+
+    return { success: true };
+  });
+
+

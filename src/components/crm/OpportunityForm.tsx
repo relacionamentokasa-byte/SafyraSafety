@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { formatClientDisplayName } from '@/lib/format-name';
 import { getRepresentativeOptions } from '@/lib/representatives.services';
-import { getCrmStages } from '@/lib/crm.services';
+import { getCrmStages, createOpportunityServer } from '@/lib/crm.services';
 
 const formSchema = z.object({
   title: z.string().min(3, 'Título deve ter no mínimo 3 caracteres'),
@@ -81,11 +81,7 @@ export function OpportunityForm({ onSuccess }: { onSuccess: () => void }) {
 
   const createOpportunity = useMutation({
     mutationFn: async (values: FormValues) => {
-      const { error } = await supabase.from('opportunities').insert([{
-        ...values,
-        status: 'open',
-      }]);
-      if (error) throw error;
+      return await createOpportunityServer({ data: values });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities-kanban'] });
@@ -93,9 +89,9 @@ export function OpportunityForm({ onSuccess }: { onSuccess: () => void }) {
       toast.success('Oportunidade criada com sucesso!');
       onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error(error);
-      toast.error('Erro ao criar oportunidade.');
+      toast.error(error?.message || 'Erro ao criar oportunidade.');
     }
   });
 
