@@ -209,14 +209,21 @@ export function ProductStep() {
   );
   const suggestedPlan = paymentCatalog?.plans.find((plan) => plan.code === "30/45/60");
 
+  // Auto-selecionar a primeira tabela de preço disponível para cada item caso ainda não esteja selecionada
   useEffect(() => {
-    if (hasLibusProduct && !paymentMethodId && !paymentPlanId && suggestedPlan) {
-      setValue("payment_plan_id", suggestedPlan.id, { shouldDirty: true });
-      if (suggestedPlan.payment_method_id) {
-        setValue("payment_method_id", suggestedPlan.payment_method_id, { shouldDirty: true });
+    if (priceOptions.length === 0) return;
+    items.forEach((item, index) => {
+      if (!item.price_table_item_id && item.product_id) {
+        const availableOptions = priceOptions.filter((opt) => opt.product_id === item.product_id);
+        if (availableOptions.length > 0) {
+          setValue(`items.${index}.price_table_item_id`, availableOptions[0].id, {
+            shouldDirty: true,
+            shouldValidate: true,
+          });
+        }
       }
-    }
-  }, [hasLibusProduct, paymentMethodId, paymentPlanId, setValue, suggestedPlan]);
+    });
+  }, [priceOptions, items, setValue]);
 
   const getPriceOption = (priceTableItemId: string | null | undefined) =>
     priceOptions.find((option) => option.id === priceTableItemId);
@@ -237,10 +244,15 @@ export function ProductStep() {
   const previewTotal = Math.max(previewSubtotal - previewDiscount, 0);
 
   const handleAddProduct = (product: ProductPreview) => {
+    // Buscar se o produto já tem uma opção de preço disponível para pré-selecionar automaticamente
+    const defaultOption = priceOptions.find(
+      (opt) => opt.product_id === product.id && opt.price_table?.status === "active"
+    );
+
     append({
       product_id: product.id,
       manufacturer_id: product.manufacturer_id,
-      price_table_item_id: null,
+      price_table_item_id: defaultOption ? defaultOption.id : null,
       quantity: 1,
       requested_discount_percent: 0,
     });

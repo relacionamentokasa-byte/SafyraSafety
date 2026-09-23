@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Client } from "@/types/database.types";
 import { enrichClientsWithOrderMetrics } from "./client-metrics.utils";
 import { PREDEFINED_REGIONS } from "./regions.services";
+import { fetchClientsServer } from "./clients.functions";
 
 export interface ClientFilters {
   search?: string;
@@ -10,6 +11,7 @@ export interface ClientFilters {
   state?: string;
   city?: string;
   region?: string;
+  isTrash?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -26,31 +28,46 @@ export function isUuid(value: string): boolean {
 export async function getClients(
   filters: ClientFilters = {},
 ): Promise<{ data: any[]; count: number }> {
-  const { search = "", status = "all", state, city, region, page = 0, pageSize = 10 } = filters;
+  const { search = "", status = "all", state, city, region, isTrash = false, page = 0, pageSize = 10 } = filters;
   const term = search.toLowerCase().trim();
 
   let dbClients: any[] = [];
+  let dbOrders: any[] = [];
+
+  // Tenta buscar via Server Function (Bypassa RLS com segurança e garante carga rápida)
   try {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*, representatives(id, name, photo_url)");
-    if (!error && data) dbClients = data;
-  } catch (err) {
-    console.warn("Supabase clients fetch error:", err);
+    const serverRes = await fetchClientsServer({ data: {} });
+    if (serverRes && serverRes.clients && serverRes.clients.length > 0) {
+      dbClients = serverRes.clients;
+      dbOrders = serverRes.orders || [];
+    }
+  } catch (errServer) {
+    console.warn("fetchClientsServer fallback:", errServer);
   }
 
-  let dbOrders: any[] = [];
-  try {
-    const { data: orders, error } = await supabase
-      .from("orders")
-      .select("id, client_id, total_amount, created_at, status")
-      .not("client_id", "is", null);
-
-    if (!error && orders) {
-      dbOrders = orders;
+  // Fallback caso a server function não esteja disponível
+  if (dbClients.length === 0) {
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*, representatives(id, name, photo_url)");
+      if (!error && data && data.length > 0) dbClients = data;
+    } catch (err) {
+      console.warn("Supabase clients fetch error:", err);
     }
-  } catch (err) {
-    console.warn("Supabase orders fetch error:", err);
+
+    try {
+      const { data: orders, error } = await supabase
+        .from("orders")
+        .select("id, client_id, total_amount, created_at, status")
+        .not("client_id", "is", null);
+
+      if (!error && orders) {
+        dbOrders = orders;
+      }
+    } catch (err) {
+      console.warn("Supabase orders fetch error:", err);
+    }
   }
 
   const enrichedClients = enrichClientsWithOrderMetrics(dbClients, dbOrders);
@@ -60,7 +77,12 @@ export async function getClients(
     last_order_at: client.lastOrderDate || null,
   }));
 
-  let filtered = dbClients.filter((c) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14));
+  // Separar clientes na lixeira vs ativos
+  let filtered = dbClients.filter((c) => {
+    const hasValidCnpj = Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14);
+    const inTrash = Boolean((c.notes || "").includes("[TRASH:"));
+    return hasValidCnpj && (isTrash ? inTrash : !inTrash);
+  });
 
   // Ordenação alfabética por Nome / Razão Social
   filtered.sort((a, b) => {
@@ -159,15 +181,21 @@ export async function getClientById(id: string): Promise<any | null> {
  * Busca estatísticas agregadas da carteira de clientes (apenas com CNPJ válido)
  */
 export async function getClientsStats() {
-  let dbClients: any[] = [];
-  try {
-    const { data, error } = await supabase.from("clients").select("*");
-    if (!error && data) dbClients = data;
-  } catch (err) {
-    console.warn("Supabase clients fetch error:", err);
-  }
+  const { data: allClientsList } = await getClients({ pageSize: 1500 });
 
-  const allClients = dbClients.filter((c) => Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14));
+  let dbClients: any[] = allClientsList;
+
+  const allClients = dbClients.filter((c) => {
+    const hasValidCnpj = Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14);
+    const inTrash = Boolean((c.notes || "").includes("[TRASH:"));
+    return hasValidCnpj && !inTrash;
+  });
+
+  const trashedCount = dbClients.filter((c) => {
+    const hasValidCnpj = Boolean(c.cnpj && c.cnpj.replace(/\D/g, "").length === 14);
+    const inTrash = Boolean((c.notes || "").includes("[TRASH:"));
+    return hasValidCnpj && inTrash;
+  }).length;
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -183,6 +211,7 @@ export async function getClientsStats() {
     total: allClients.length,
     active: allClients.filter((c) => c.status === "active").length,
     prospect: allClients.filter((c) => c.status === "prospect").length,
+    trashed: trashedCount,
     newThisMonth: newClientsMonth,
   };
 }

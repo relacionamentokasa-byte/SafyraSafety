@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { PriceTable, PriceTableItem, ResolvePriceParams, ResolvedPriceResult } from '@/types/pricing.types';
 import { getClientById } from '@/lib/clients.services';
 
-// Tabelas de preço canônicas do sistema
+// Tabelas de preço canônicas do sistema (Atualizadas com a vigência oficial Agosto/Setembro 2026)
 export const CANONICAL_PRICE_TABLES: Array<{
   id: string;
   code: string;
@@ -13,85 +13,67 @@ export const CANONICAL_PRICE_TABLES: Array<{
   description: string;
 }> = [
   {
-    id: 'NUTRIEX-VAREJO',
-    code: 'NUTRIEX-VAREJO',
-    name: 'Nutriex - Tabela Varejo (Padrão)',
-    target_audience: 'consumidor_final',
-    manufacturer_name: 'Nutriex Profissional',
-    is_default: true,
-    description: 'Preços balcão e varejo padrão para linha Nutriex'
-  },
-  {
-    id: 'NUTRIEX-PRATA',
-    code: 'NUTRIEX-PRATA',
-    name: 'Nutriex - Prata (Especialista)',
-    target_audience: 'revenda',
-    manufacturer_name: 'Nutriex Profissional',
-    is_default: false,
-    description: 'Tabela intermediária especialista para revenda'
-  },
-  {
-    id: 'NUTRIEX-OURO',
-    code: 'NUTRIEX-OURO',
-    name: 'Nutriex - Ouro (Intermediária)',
+    id: 'NUTRIEX-INTERMEDIARIA',
+    code: 'NUTRIEX-INTERMEDIARIA',
+    name: 'Nutriex - Intermediária (Agosto/Setembro 2026)',
     target_audience: 'industria',
     manufacturer_name: 'Nutriex Profissional',
-    is_default: false,
-    description: 'Tabela competitiva para grandes indústrias e clientes corporativos'
+    is_default: true,
+    description: 'Tabela oficial reduzida Nutriex - Condição Intermediária'
   },
   {
-    id: 'NUTRIEX-DIAMANTE',
-    code: 'NUTRIEX-DIAMANTE',
-    name: 'Nutriex - Diamante (Distribuidor)',
+    id: 'NUTRIEX-DISTRIBUIDOR',
+    code: 'NUTRIEX-DISTRIBUIDOR',
+    name: 'Nutriex - Distribuidor (Agosto/Setembro 2026)',
     target_audience: 'distribuidor',
     manufacturer_name: 'Nutriex Profissional',
     is_default: false,
-    description: 'Preço de custo/atacado máximo para parceiros distribuidores'
+    description: 'Tabela oficial reduzida Nutriex - Condição Distribuidor'
   },
   {
-    id: 'LIBUS-CLIENTE-FINAL',
-    code: 'LIBUS-CLIENTE-FINAL',
-    name: 'Libus - Cliente Final GO/CO',
-    target_audience: 'consumidor_final',
-    manufacturer_name: 'LIBUS do Brasil',
-    is_default: false,
-    description: 'Tabela oficial V13 Libus para Consumidor Final em Goiás e Centro-Oeste'
-  },
-  {
-    id: 'LIBUS-REVENDA',
-    code: 'LIBUS-REVENDA',
-    name: 'Libus - Revenda GO/CO',
+    id: 'LIBUS-REVENDA-2026',
+    code: 'LIBUS-REVENDA-2026',
+    name: 'Libus - Revenda Brasil (Agosto 2026 Rev00)',
     target_audience: 'revenda',
     manufacturer_name: 'LIBUS do Brasil',
     is_default: true,
-    description: 'Tabela oficial V13 Libus para Revendedores e Lojistas em GO/CO'
+    description: 'Tabela oficial Libus Brasil Revenda com faixas fiscais regionalizadas (SP, Sul/Sudeste, NO/NE/CO, ZF)'
   },
   {
-    id: 'LIBUS-DIST-AUTORIZADO',
-    code: 'LIBUS-DIST-AUTORIZADO',
-    name: 'Libus - Distribuidor Autorizado GO/CO',
+    id: 'LIBUS-MASTER-2026',
+    code: 'LIBUS-MASTER-2026',
+    name: 'Libus - Distribuidor Master Brasil (Agosto 2026 Rev00)',
     target_audience: 'distribuidor',
     manufacturer_name: 'LIBUS do Brasil',
     is_default: false,
-    description: 'Tabela V13 Libus nível Distribuidor Autorizado'
+    description: 'Tabela oficial Libus Brasil Distribuidor Master com faixas fiscais regionalizadas'
   },
   {
-    id: 'LIBUS-DIST-PREMIUM',
-    code: 'LIBUS-DIST-PREMIUM',
-    name: 'Libus - Distribuidor Premium GO/CO',
+    id: 'MEDIX-CIF-F1',
+    code: 'MEDIX-CIF-F1',
+    name: 'Medix - Distribuidor CIF Faixa 1 (01/09/2026)',
     target_audience: 'distribuidor',
-    manufacturer_name: 'LIBUS do Brasil',
-    is_default: false,
-    description: 'Tabela V13 Libus nível Distribuidor Premium'
+    manufacturer_name: 'Medix Brasil',
+    is_default: true,
+    description: 'Tabela oficial Medix Distribuidor CIF Sul/Sudeste/CO - Faturamento Faixa 1'
   },
   {
-    id: 'LIBUS-DIST-MASTER',
-    code: 'LIBUS-DIST-MASTER',
-    name: 'Libus - Distribuidor Master GO/CO',
+    id: 'MEDIX-CIF-F2',
+    code: 'MEDIX-CIF-F2',
+    name: 'Medix - Distribuidor CIF Faixa 2 (01/09/2026)',
     target_audience: 'distribuidor',
-    manufacturer_name: 'LIBUS do Brasil',
+    manufacturer_name: 'Medix Brasil',
     is_default: false,
-    description: 'Tabela V13 Libus melhor condição comercial (Master) para GO/CO'
+    description: 'Tabela oficial Medix Distribuidor CIF Sul/Sudeste/CO - Faturamento Faixa 2'
+  },
+  {
+    id: 'MEDIX-CIF-F3',
+    code: 'MEDIX-CIF-F3',
+    name: 'Medix - Distribuidor CIF Faixa 3 (01/09/2026)',
+    target_audience: 'distribuidor',
+    manufacturer_name: 'Medix Brasil',
+    is_default: false,
+    description: 'Tabela oficial Medix Distribuidor CIF Sul/Sudeste/CO - Faturamento Faixa 3'
   }
 ];
 

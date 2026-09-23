@@ -1,6 +1,45 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
+/**
+ * Busca dados completos e reais do Dashboard com Service Role / Auth
+ */
+export const fetchDashboardServerData = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      supabaseKey,
+      { auth: { persistSession: false } }
+    );
+
+    const [
+      { data: orders },
+      { data: visits },
+      { data: commissions }
+    ] = await Promise.all([
+      supabaseAdmin.from('orders').select('id, total_amount, created_at, status'),
+      supabaseAdmin.from('visits').select('id, scheduled_at, status'),
+      supabaseAdmin.from('commissions').select(`
+        id,
+        commission_value,
+        status,
+        created_at,
+        paid_at,
+        manufacturer:manufacturers(name, payout_day_of_month),
+        order_payment:order_payment_id(due_date, received_at)
+      `)
+    ]);
+
+    return {
+      orders: orders || [],
+      visits: visits || [],
+      commissions: commissions || []
+    };
+  });
+
 export const getAggregatedDashboardStats = createServerFn({ method: "GET" })
   .handler(async () => {
     const { data: { user } } = await supabase.auth.getUser();

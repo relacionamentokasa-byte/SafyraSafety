@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getClientsStats } from '@/lib/clients.services';
+import { fetchDashboardServerData } from '@/lib/dashboard.functions';
 
 export interface MonthlyCommissionForecast {
   monthKey: string; // "2026-09"
@@ -49,45 +50,62 @@ export async function getDashboardData(): Promise<DashboardRealStats> {
   // 1. Clientes reais
   const clientStats = await getClientsStats();
 
-  // 2. Pedidos reais do banco de dados
+  // 2. Buscar pedidos, visitas e comissões via Server Function (Garante carga sem bloqueio de RLS)
   let orders: any[] = [];
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('id, total_amount, created_at, status');
-    if (!error && data) orders = data;
-  } catch (err) {
-    console.warn('Orders fetch warning:', err);
-  }
-
-  // 3. Visitas reais do banco de dados
   let visits: any[] = [];
+  let commissions: any[] = [];
+
   try {
-    const { data, error } = await supabase
-      .from('visits')
-      .select('id, scheduled_at, status');
-    if (!error && data) visits = data;
-  } catch (err) {
-    console.warn('Visits fetch warning:', err);
+    const serverRes = await fetchDashboardServerData();
+    if (serverRes) {
+      orders = serverRes.orders || [];
+      visits = serverRes.visits || [];
+      commissions = serverRes.commissions || [];
+    }
+  } catch (errServer) {
+    console.warn('fetchDashboardServerData fallback:', errServer);
   }
 
-  // 4. Comissões e parcelas de pedidos para previsão de recebimento
-  let commissions: any[] = [];
-  try {
-    const { data, error } = await supabase
-      .from('commissions')
-      .select(`
-        id,
-        commission_value,
-        status,
-        created_at,
-        paid_at,
-        manufacturer:manufacturers(name, payout_day_of_month),
-        order_payment:order_payment_id(due_date, received_at)
-      `);
-    if (!error && data) commissions = data;
-  } catch (err) {
-    console.warn('Commissions fetch warning:', err);
+  // Fallback caso a server function não retorne dados
+  if (orders.length === 0) {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, total_amount, created_at, status');
+      if (!error && data) orders = data;
+    } catch (err) {
+      console.warn('Orders fetch warning:', err);
+    }
+  }
+
+  if (visits.length === 0) {
+    try {
+      const { data, error } = await supabase
+        .from('visits')
+        .select('id, scheduled_at, status');
+      if (!error && data) visits = data;
+    } catch (err) {
+      console.warn('Visits fetch warning:', err);
+    }
+  }
+
+  if (commissions.length === 0) {
+    try {
+      const { data, error } = await supabase
+        .from('commissions')
+        .select(`
+          id,
+          commission_value,
+          status,
+          created_at,
+          paid_at,
+          manufacturer:manufacturers(name, payout_day_of_month),
+          order_payment:order_payment_id(due_date, received_at)
+        `);
+      if (!error && data) commissions = data;
+    } catch (err) {
+      console.warn('Commissions fetch warning:', err);
+    }
   }
 
   const validOrders = orders.filter(o => o.status !== 'cancelled');
@@ -154,18 +172,19 @@ export async function getDashboardData(): Promise<DashboardRealStats> {
     const mName = c.manufacturer?.name || 'Indústria';
     const payoutDay = c.manufacturer?.payout_day_of_month || 15;
 
-    // Prioridade da data: parcela (order_payment.due_date / received_at), depois paid_at, depois created_at
-    let targetDate: Date;
+    // Regra comercial de repasse das indústrias:
+    // O fechamento e repasse da indústria referente às vendas e liquidações do mês M é creditado no mês seguinte (M+1) no dia do repasse (payout_day_of_month).
+    // Exemplo: Vendas de Agosto/2026 têm repasse em 15/09 ou 25/09 (Setembro/2026). Vendas de Setembro/2026 têm previsão para Outubro/2026.
+    let baseDate: Date;
     if (c.order_payment?.received_at) {
-      targetDate = new Date(c.order_payment.received_at);
+      baseDate = new Date(c.order_payment.received_at);
     } else if (c.order_payment?.due_date) {
-      targetDate = new Date(c.order_payment.due_date);
-    } else if (c.paid_at) {
-      targetDate = new Date(c.paid_at);
+      baseDate = new Date(c.order_payment.due_date);
     } else {
-      targetDate = new Date(c.created_at || new Date());
+      baseDate = new Date(c.created_at || new Date());
     }
 
+    const targetDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, payoutDay);
     const mKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
 
     if (forecastMap.has(mKey)) {

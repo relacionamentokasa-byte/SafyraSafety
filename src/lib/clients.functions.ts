@@ -45,6 +45,41 @@ const clientSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+/**
+ * Função de servidor para buscar clientes e métricas via Service Role / Auth
+ */
+export const fetchClientsServer = createServerFn({ method: "GET" })
+  .inputValidator((data: any) => data || {})
+  .handler(async ({ data }) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const supabaseAdmin = createClient(
+      supabaseUrl,
+      supabaseKey,
+      { auth: { persistSession: false } }
+    );
+
+    const { data: clients, error: errClients } = await supabaseAdmin
+      .from('clients')
+      .select('*, representatives(id, name, photo_url)');
+
+    if (errClients) {
+      console.error("Erro ao buscar clientes via server:", errClients);
+      return { clients: [], orders: [] };
+    }
+
+    const { data: orders, error: errOrders } = await supabaseAdmin
+      .from('orders')
+      .select('id, client_id, total_amount, created_at, status')
+      .not('client_id', 'is', null);
+
+    return {
+      clients: clients || [],
+      orders: orders || [],
+    };
+  });
+
 export const createClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => clientSchema.parse(data))
@@ -369,4 +404,165 @@ export const enrichAllClientsGeocoding = createServerFn({ method: "POST" })
       results,
     };
   });
+
+/**
+ * Mover cliente para a Lixeira (Soft Delete)
+ */
+export const moveToTrashClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { id } = data;
+
+    const { data: client, error: fetchErr } = await supabase
+      .from("clients")
+      .select("id, notes, status")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !client) {
+      throw new Error("Cliente não encontrado.");
+    }
+
+    const currentNotes = client.notes || "";
+    const trashMarker = `[TRASH:${new Date().toISOString()}]`;
+    const updatedNotes = currentNotes.includes("[TRASH:")
+      ? currentNotes
+      : `${trashMarker} ${currentNotes}`.trim();
+
+    const { error: updateErr } = await supabase
+      .from("clients")
+      .update({
+        notes: updatedNotes,
+        updated_at: new Date().toISOString(),
+        updated_by: context.userId,
+      })
+      .eq("id", id);
+
+    if (updateErr) {
+      throw new Error(`Erro ao mover cliente para a lixeira: ${updateErr.message}`);
+    }
+
+    return { success: true, message: "Cliente movido para a lixeira com sucesso." };
+  });
+
+/**
+ * Restaurar cliente da Lixeira
+ */
+export const restoreFromTrashClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { id } = data;
+
+    const { data: client, error: fetchErr } = await supabase
+      .from("clients")
+      .select("id, notes")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !client) {
+      throw new Error("Cliente não encontrado.");
+    }
+
+    const cleanedNotes = (client.notes || "").replace(/\[TRASH:[^\]]+\]\s*/g, "").trim();
+
+    const { error: updateErr } = await supabase
+      .from("clients")
+      .update({
+        notes: cleanedNotes || null,
+        status: "active",
+        updated_at: new Date().toISOString(),
+        updated_by: context.userId,
+      })
+      .eq("id", id);
+
+    if (updateErr) {
+      throw new Error(`Erro ao restaurar cliente: ${updateErr.message}`);
+    }
+
+    return { success: true, message: "Cliente restaurado com sucesso." };
+  });
+
+/**
+ * Excluir cliente permanentemente (Hard Delete seguro)
+ */
+export const deleteClientPermanently = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+    const { id } = data;
+
+    const { data: orders } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("client_id", id);
+
+    if (orders && orders.length > 0) {
+      for (const ord of orders) {
+        await supabase.from("order_items").delete().eq("order_id", ord.id);
+        await supabase.from("commissions").delete().eq("order_id", ord.id);
+        await supabase.from("order_payments").delete().eq("order_id", ord.id);
+        await supabase.from("orders").delete().eq("id", ord.id);
+      }
+    }
+
+    await supabase.from("visits").delete().eq("client_id", id);
+    await supabase.from("client_contacts").delete().eq("client_id", id);
+    await supabase.from("follow_ups").delete().eq("client_id", id);
+    await supabase.from("opportunities").delete().eq("client_id", id);
+
+    const { error: delErr } = await supabase
+      .from("clients")
+      .delete()
+      .eq("id", id);
+
+    if (delErr) {
+      throw new Error(`Erro ao excluir cliente permanentemente: ${delErr.message}`);
+    }
+
+    return { success: true, message: "Cliente excluído permanentemente." };
+  });
+
+/**
+ * Esvaziar lixeira
+ */
+export const emptyClientTrash = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const supabase = context.supabase;
+
+    const { data: trashedClients, error: fetchErr } = await supabase
+      .from("clients")
+      .select("id, notes");
+
+    if (fetchErr) throw fetchErr;
+
+    const inTrash = (trashedClients || []).filter((c: any) => (c.notes || "").includes("[TRASH:"));
+    let deletedCount = 0;
+
+    for (const c of inTrash) {
+      const { data: orders } = await supabase.from("orders").select("id").eq("client_id", c.id);
+      if (orders && orders.length > 0) {
+        for (const ord of orders) {
+          await supabase.from("order_items").delete().eq("order_id", ord.id);
+          await supabase.from("commissions").delete().eq("order_id", ord.id);
+          await supabase.from("order_payments").delete().eq("order_id", ord.id);
+          await supabase.from("orders").delete().eq("id", ord.id);
+        }
+      }
+      await supabase.from("visits").delete().eq("client_id", c.id);
+      await supabase.from("client_contacts").delete().eq("client_id", c.id);
+      await supabase.from("follow_ups").delete().eq("client_id", c.id);
+      await supabase.from("opportunities").delete().eq("client_id", c.id);
+      await supabase.from("clients").delete().eq("id", c.id);
+      deletedCount++;
+    }
+
+    return { success: true, count: deletedCount, message: `${deletedCount} clientes excluídos permanentemente.` };
+  });
+
 

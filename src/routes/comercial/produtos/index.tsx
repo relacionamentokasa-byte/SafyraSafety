@@ -4,14 +4,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Package, 
-  CheckCircle2, 
-  XCircle, 
-  Layers, 
+import {
+  Plus,
+  Search,
+  Filter,
+  Package,
+  CheckCircle2,
+  XCircle,
+  Layers,
   TrendingUp,
   MoreVertical,
   Eye,
@@ -19,6 +19,7 @@ import {
   Copy,
   Power,
   PowerOff,
+  Trash2,
   Image as ImageIcon
 } from 'lucide-react';
 import {
@@ -39,8 +40,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
@@ -51,7 +62,8 @@ import { formatDisplayName } from '@/lib/format';
 import { groupProductsIntoVariants, ProductGroup } from '@/lib/product-variants';
 import { ProductColorSelector } from '@/components/produtos/ProductColorSelector';
 import { ProductImageModal } from '@/components/produtos/ProductImageModal';
-import { useQueryClient } from '@tanstack/react-query';
+import { ProductFormModal } from '@/components/produtos/ProductFormModal';
+import { toggleProductStatusServer, duplicateProductServer, deleteProductServer, fetchAllProductsServer } from '@/lib/orders.functions';
 
 export const Route = createFileRoute('/comercial/produtos/')({
   head: () => ({
@@ -68,11 +80,58 @@ function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, string>>({});
   const [selectedProductForImage, setSelectedProductForImage] = useState<any | null>(null);
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<any | null>(null);
+  const [productToDelete, setProductToDelete] = useState<any | null>(null);
 
   // Estados dos filtros
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [manufacturerFilter, setManufacturerFilter] = useState<string>('all');
+
+  // Mutações para Ações Rápidas (Menu ⋮)
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ productId, status }: { productId: string; status: 'active' | 'inactive' }) => {
+      return await toggleProductStatusServer({ data: { productId, status } });
+    },
+    onSuccess: (_, variables) => {
+      toast.success(variables.status === 'active' ? 'Produto ativado com sucesso!' : 'Produto desativado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao alterar status: ' + (err.message || 'Falha ao processar'));
+    }
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      return await duplicateProductServer({ data: { productId } });
+    },
+    onSuccess: (res) => {
+      toast.success('Produto duplicado com sucesso! Cópia criada no catálogo.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao duplicar produto: ' + (err.message || 'Falha ao processar'));
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      return await deleteProductServer({ data: { productId } });
+    },
+    onSuccess: (res: any) => {
+      if (res?.archived) {
+        toast.info('O produto possui pedidos vinculados no histórico contábil e foi desativado/arquivado com sucesso!');
+      } else {
+        toast.success('Produto excluído com sucesso do catálogo!');
+      }
+      setProductToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (err: any) => {
+      toast.error('Erro ao excluir produto: ' + (err.message || 'Falha ao processar'));
+    }
+  });
 
   // Carregar dados para filtros
   const { data: categories } = useQuery({
@@ -97,20 +156,42 @@ function ProductsPage() {
   const { data: productsData, isLoading } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          categories:product_categories(name),
-          manufacturers(name, logo_path)
-        `)
-        .order('name');
-      
-      if (error) {
-        toast.error('Erro ao carregar produtos: ' + error.message);
-        throw error;
+      try {
+        const serverData = await fetchAllProductsServer();
+        if (serverData && serverData.length > 0) {
+          return serverData;
+        }
+      } catch (err) {
+        console.warn('Fallback para cliente supabase:', err);
       }
-      return data;
+
+      let allProducts: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            categories:product_categories(name),
+            manufacturers(name, logo_path)
+          `)
+          .order('name')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+          toast.error('Erro ao carregar produtos: ' + error.message);
+          throw error;
+        }
+
+        if (!data || data.length === 0) break;
+        allProducts.push(...data);
+        if (data.length < pageSize) break;
+        page++;
+      }
+
+      return allProducts;
     }
   });
 
@@ -407,12 +488,12 @@ function ProductsPage() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuLabel>Ações</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
                                 <Link to="/comercial/produtos/$id" params={{ id: product.id }} className="flex items-center gap-2 cursor-pointer">
-                                  <Eye className="h-4 w-4 text-primary" /> Visualizar
+                                  <Eye className="h-4 w-4 text-primary" /> Visualizar Detalhes
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -421,11 +502,42 @@ function ProductsPage() {
                               >
                                 <ImageIcon className="h-4 w-4 text-primary" /> Alterar Foto
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2">
-                                <Edit className="h-4 w-4 text-primary" /> Editar
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={() => setSelectedProductForEdit(product)}
+                              >
+                                <Edit className="h-4 w-4 text-primary" /> Editar Produto
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2">
-                                <Copy className="h-4 w-4 text-primary" /> Duplicar
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer"
+                                disabled={duplicateMutation.isPending}
+                                onClick={() => duplicateMutation.mutate(product.id)}
+                              >
+                                <Copy className="h-4 w-4 text-primary" /> Duplicar Produto
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className={cn(
+                                  "flex items-center gap-2 cursor-pointer",
+                                  product.status === 'active' ? "text-amber-600 focus:text-amber-600" : "text-emerald-600 focus:text-emerald-600"
+                                )}
+                                disabled={toggleStatusMutation.isPending}
+                                onClick={() => toggleStatusMutation.mutate({
+                                  productId: product.id,
+                                  status: product.status === 'active' ? 'inactive' : 'active'
+                                })}
+                              >
+                                {product.status === 'active' ? (
+                                  <><PowerOff className="h-4 w-4" /> Desativar</>
+                                ) : (
+                                  <><Power className="h-4 w-4" /> Ativar</>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => setProductToDelete(product)}
+                              >
+                                <Trash2 className="h-4 w-4" /> Excluir
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -621,12 +733,12 @@ function ProductsPage() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuLabel>Ações</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
                                 <Link to="/comercial/produtos/$id" params={{ id: product.id }} className="flex items-center gap-2 cursor-pointer">
-                                  <Eye className="h-4 w-4 text-primary" /> Visualizar
+                                  <Eye className="h-4 w-4 text-primary" /> Visualizar Detalhes
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -635,45 +747,107 @@ function ProductsPage() {
                               >
                                 <ImageIcon className="h-4 w-4 text-primary" /> Alterar Foto
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2">
-                                <Edit className="h-4 w-4 text-primary" /> Editar
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={() => setSelectedProductForEdit(product)}
+                              >
+                                <Edit className="h-4 w-4 text-primary" /> Editar Produto
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="flex items-center gap-2">
-                                <Copy className="h-4 w-4 text-primary" /> Duplicar
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 cursor-pointer"
+                                disabled={duplicateMutation.isPending}
+                                onClick={() => duplicateMutation.mutate(product.id)}
+                              >
+                                <Copy className="h-4 w-4 text-primary" /> Duplicar Produto
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                            <DropdownMenuItem className={cn(
-                              "flex items-center gap-2",
-                              product.status === 'active' ? "text-destructive" : "text-emerald-600"
-                            )}>
-                              {product.status === 'active' ? (
-                                <><PowerOff className="h-4 w-4" /> Desativar</>
-                              ) : (
-                                <><Power className="h-4 w-4" /> Ativar</>
-                              )}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                </TableBody>
-              </Table>
+                              <DropdownMenuItem
+                                className={cn(
+                                  "flex items-center gap-2 cursor-pointer",
+                                  product.status === 'active' ? "text-amber-600 focus:text-amber-600" : "text-emerald-600 focus:text-emerald-600"
+                                )}
+                                disabled={toggleStatusMutation.isPending}
+                                onClick={() => toggleStatusMutation.mutate({
+                                  productId: product.id,
+                                  status: product.status === 'active' ? 'inactive' : 'active'
+                                })}
+                              >
+                                {product.status === 'active' ? (
+                                  <><PowerOff className="h-4 w-4" /> Desativar</>
+                                ) : (
+                                  <><Power className="h-4 w-4" /> Ativar</>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => setProductToDelete(product)}
+                              >
+                                <Trash2 className="h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Modal para Alterar/Adicionar Foto do Produto */}
-      <ProductImageModal
-        isOpen={!!selectedProductForImage}
-        onClose={() => setSelectedProductForImage(null)}
-        product={selectedProductForImage}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['products'] });
-        }}
-      />
-    </AppLayout>
-  );
-}
+        {/* Modal de Edição Rápida do Produto */}
+        <ProductFormModal
+          isOpen={!!selectedProductForEdit}
+          onClose={() => setSelectedProductForEdit(null)}
+          product={selectedProductForEdit}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+          }}
+        />
+
+        {/* Modal de Confirmação de Exclusão */}
+        <AlertDialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir produto do catálogo?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <span>
+                  Tem certeza que deseja excluir o produto <strong>"{productToDelete?.name}"</strong>?
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  * Caso o produto já tenha sido utilizado em pedidos faturados anteriores, ele será automaticamente arquivado e desativado para preservar o histórico contábil sem quebras.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (productToDelete?.id) {
+                    deleteMutation.mutate(productToDelete.id);
+                  }
+                }}
+              >
+                {deleteMutation.isPending ? 'Processando...' : 'Confirmar Exclusão'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Modal para Alterar/Adicionar Foto do Produto */}
+        <ProductImageModal
+          isOpen={!!selectedProductForImage}
+          onClose={() => setSelectedProductForImage(null)}
+          product={selectedProductForImage}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+          }}
+        />
+      </AppLayout>
+    );
+  }

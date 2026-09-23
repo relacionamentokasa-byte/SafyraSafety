@@ -24,6 +24,7 @@ import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { formatClientDisplayName } from '@/lib/format-name';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
+import { fetchCommissionsServer } from '@/lib/orders.functions';
 
 export const Route = createFileRoute('/comercial/comissoes/')({
   head: () => ({
@@ -100,6 +101,13 @@ function CommissionsPage() {
   const { data: commissions, isLoading } = useQuery({
     queryKey: ['commissions'],
     queryFn: async () => {
+      try {
+        const res = await fetchCommissionsServer({ data: {} });
+        if (res && res.length > 0) return res;
+      } catch (err) {
+        console.warn("fetchCommissionsServer fallback:", err);
+      }
+
       const { data, error } = await supabase
         .from('commissions')
         .select(`
@@ -126,7 +134,7 @@ function CommissionsPage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as any[];
+      return (data || []) as any[];
     }
   });
 

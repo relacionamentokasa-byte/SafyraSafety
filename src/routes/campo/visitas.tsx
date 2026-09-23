@@ -43,6 +43,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ResponsiveModal } from "@/components/common/ResponsiveModal";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -93,32 +100,113 @@ function VisitsPage() {
   const [visitToDelete, setVisitToDelete] = useState<any>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const currentMonthNum = new Date().getMonth() + 1;
+  const currentYearNum = new Date().getFullYear();
+
+  // Estados dos filtros
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [monthFilter, setMonthFilter] = useState<string>(String(currentMonthNum));
+  const [yearFilter, setYearFilter] = useState<string>(String(currentYearNum));
+  const [representativeFilter, setRepresentativeFilter] = useState<string>('all');
+
+  const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+
+  const availableYears = [String(currentYearNum - 1), String(currentYearNum), String(currentYearNum + 1)];
+
+  // Lista de representantes para o filtro
+  const { data: representatives } = useQuery({
+    queryKey: ['representatives-filter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('representatives')
+        .select('id, name, code, photo_url')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: visits, isLoading } = useQuery({
-    queryKey: ['visits-list', deferredSearch],
+    queryKey: ['visits-list', deferredSearch, statusFilter, monthFilter, yearFilter, representativeFilter],
     queryFn: async () => {
       let query = supabase
         .from('visits')
         .select(`
           *,
-          client:clients(name, city, address),
+          client:clients(name, city, address, phone, whatsapp, latitude, longitude, neighborhood, address_number, state),
           representative:representatives(name, code, photo_url)
         `)
         .order('scheduled_at', { ascending: false });
 
-      const { data, error } = await query.limit(50);
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter as any);
+      }
+
+      if (representativeFilter !== 'all') {
+        query = query.eq('representative_id', representativeFilter);
+      }
+
+      // Filtro de Mês e Ano
+      if (yearFilter !== 'all') {
+        const yearInt = parseInt(yearFilter, 10);
+        if (monthFilter !== 'all') {
+          const monthInt = parseInt(monthFilter, 10);
+          const startIso = new Date(Date.UTC(yearInt, monthInt - 1, 1, 0, 0, 0)).toISOString();
+          const endIso = new Date(Date.UTC(yearInt, monthInt, 0, 23, 59, 59, 999)).toISOString();
+          query = query.gte('scheduled_at', startIso).lte('scheduled_at', endIso);
+        } else {
+          const startIso = new Date(Date.UTC(yearInt, 0, 1, 0, 0, 0)).toISOString();
+          const endIso = new Date(Date.UTC(yearInt, 11, 31, 23, 59, 59, 999)).toISOString();
+          query = query.gte('scheduled_at', startIso).lte('scheduled_at', endIso);
+        }
+      } else if (monthFilter !== 'all') {
+        // Se escolheu mês mas ano todos, pega ano atual
+        const monthInt = parseInt(monthFilter, 10);
+        const startIso = new Date(Date.UTC(currentYearNum, monthInt - 1, 1, 0, 0, 0)).toISOString();
+        const endIso = new Date(Date.UTC(currentYearNum, monthInt, 0, 23, 59, 59, 999)).toISOString();
+        query = query.gte('scheduled_at', startIso).lte('scheduled_at', endIso);
+      }
+
+      const { data, error } = await query.limit(200);
       if (error) throw error;
 
       // Enriquecer dados do cliente se o join relacional do Supabase não retornou para clientes canônicos
-      const enriched = await Promise.all((data || []).map(async (v: any) => {
+      let enriched = await Promise.all((data || []).map(async (v: any) => {
         if (!v.client && v.client_id) {
           const clientData = await getClientById(v.client_id);
           return {
             ...v,
-            client: clientData ? { name: clientData.name, city: clientData.city, address: clientData.address } : null
+            client: clientData ? {
+              name: clientData.name,
+              city: clientData.city,
+              address: clientData.address,
+              phone: clientData.phone,
+              whatsapp: clientData.whatsapp,
+              latitude: clientData.latitude,
+              longitude: clientData.longitude,
+              neighborhood: clientData.neighborhood,
+              address_number: clientData.address_number,
+              state: clientData.state
+            } : null
           };
         }
         return v;
       }));
+
+      // Busca client-side por nome do cliente ou cidade
+      if (deferredSearch.trim()) {
+        const term = deferredSearch.toLowerCase().trim();
+        enriched = enriched.filter((v: any) => {
+          const clientName = String(v.client?.name || '').toLowerCase();
+          const city = String(v.client?.city || '').toLowerCase();
+          const repName = String(v.representative?.name || '').toLowerCase();
+          const notes = String(v.notes || '').toLowerCase();
+          return clientName.includes(term) || city.includes(term) || repName.includes(term) || notes.includes(term);
+        });
+      }
 
       return enriched as any[];
     },
@@ -181,12 +269,24 @@ function VisitsPage() {
     setIsNotebookOpen(true);
   };
 
+  // Estatísticas globais não afetadas pelo filtro mensal (para o banner superior)
+  const { data: allVisitsStats } = useQuery({
+    queryKey: ['visits-all-stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('visits')
+        .select('id, scheduled_at, status');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const todayVisits = useMemo(() => {
-    if (!visits) return [];
-    return visits.filter(v =>
+    if (!allVisitsStats) return [];
+    return allVisitsStats.filter(v =>
       v.scheduled_at.startsWith(today) && v.status !== 'cancelled'
     );
-  }, [visits, today]);
+  }, [allVisitsStats, today]);
 
   const nextVisit = useMemo(() => {
     if (todayVisits.length === 0) return null;
@@ -245,7 +345,7 @@ function VisitsPage() {
               Painel de Atendimento Externo & Rota
             </span>
             <span className="text-[11px] font-mono font-medium text-slate-400">
-              {visits?.length || 0} visitas registradas
+              {allVisitsStats?.length || 0} visitas no total
             </span>
           </div>
 
@@ -273,12 +373,12 @@ function VisitsPage() {
             <div className="p-5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
               <div className="mb-2">
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Realizadas
+                  Realizadas (Total)
                 </span>
               </div>
               <div>
                 <div className="text-2xl lg:text-3xl font-bold font-mono text-slate-900 tracking-tight">
-                  {visits?.filter(v => v.status === 'completed').length || 0}
+                  {allVisitsStats?.filter(v => v.status === 'completed').length || 0}
                 </div>
                 <div className="mt-1 text-xs text-slate-400">
                   Histórico de atendimentos
@@ -290,12 +390,12 @@ function VisitsPage() {
             <div className="p-5 flex flex-col justify-between hover:bg-slate-50/40 transition-colors">
               <div className="mb-2">
                 <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Agendadas
+                  Agendadas (Total)
                 </span>
               </div>
               <div>
                 <div className="text-2xl lg:text-3xl font-bold font-mono text-slate-900 tracking-tight">
-                  {visits?.filter(v => v.status === 'scheduled').length || 0}
+                  {allVisitsStats?.filter(v => v.status === 'scheduled').length || 0}
                 </div>
                 <div className="mt-1 text-xs text-slate-400">
                   Aguardando visita
@@ -306,20 +406,114 @@ function VisitsPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-              <div className="relative w-full md:w-96">
+          <CardHeader className="pb-3 border-b border-slate-100">
+            <div className="flex flex-col lg:flex-row gap-3 justify-between items-stretch lg:items-center">
+              {/* Barra de Busca */}
+              <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por cliente ou status..." 
-                  className="pl-9 h-10" 
+                <Input
+                  placeholder="Buscar por cliente, cidade, responsável ou anotação..."
+                  className="pl-9 h-9 text-xs"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="sm" className="w-full md:w-auto">
-                <Filter className="mr-2 h-4 w-4" /> Filtros
-              </Button>
+
+              {/* Filtros em Linha: Status, Responsável, Mês, Ano */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Filtro Status */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-[130px] text-xs font-medium bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Status</SelectItem>
+                    <SelectItem value="scheduled">Agendadas</SelectItem>
+                    <SelectItem value="completed">Concluídas</SelectItem>
+                    <SelectItem value="cancelled">Canceladas</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro Representante */}
+                <Select value={representativeFilter} onValueChange={setRepresentativeFilter}>
+                  <SelectTrigger className="h-9 w-[160px] text-xs font-medium bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toda a Equipe</SelectItem>
+                    {representatives?.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro Mês */}
+                <Select value={monthFilter} onValueChange={setMonthFilter}>
+                  <SelectTrigger className="h-9 w-[140px] text-xs font-medium bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Ano Inteiro (Todos)</SelectItem>
+                    {MONTH_NAMES.map((name, index) => (
+                      <SelectItem key={index + 1} value={String(index + 1)}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Filtro Ano */}
+                <Select value={yearFilter} onValueChange={setYearFilter}>
+                  <SelectTrigger className="h-9 w-[95px] text-xs font-medium bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Ano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Botão Limpar Filtros */}
+                {(statusFilter !== 'all' || monthFilter !== 'all' || yearFilter !== 'all' || representativeFilter !== 'all' || searchTerm) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2.5 text-xs text-slate-500 hover:text-slate-900"
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setMonthFilter('all');
+                      setYearFilter('all');
+                      setRepresentativeFilter('all');
+                      setSearchTerm('');
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Indicador Ativo de Período Selecionado */}
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 font-mono">
+              <div>
+                Exibindo: <span className="font-semibold text-slate-700">
+                  {monthFilter !== 'all' ? MONTH_NAMES[parseInt(monthFilter, 10) - 1] : 'Todos os meses'} / {yearFilter !== 'all' ? yearFilter : 'Todos os anos'}
+                </span>
+                {statusFilter !== 'all' && (
+                  <span className="ml-2 font-sans font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                    {statusLabels[statusFilter as keyof typeof statusLabels]}
+                  </span>
+                )}
+              </div>
+              <div>
+                {visits?.length || 0} {visits?.length === 1 ? 'visita encontrada' : 'visitas encontradas'}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0">

@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { formatDisplayName } from '@/lib/format-name';
+import { fetchRepresentativesServer } from '@/lib/orders.functions';
 
 export interface RepresentativeOption {
   id: string;
@@ -14,14 +15,27 @@ export interface RepresentativeOption {
  */
 export async function getRepresentativeOptions(): Promise<RepresentativeOption[]> {
   try {
-    const { data, error } = await supabase
-      .from('representatives')
-      .select('id, name, code, user_id, status, photo_url')
-      .order('name');
+    let data: any[] = [];
+    try {
+      const serverReps = await fetchRepresentativesServer();
+      if (serverReps && serverReps.length > 0) {
+        data = serverReps;
+      }
+    } catch (errServer) {
+      console.warn("[getRepresentativeOptions] fallback server:", errServer);
+    }
 
-    if (error) {
-      console.error('Erro ao buscar representantes:', error);
-      return [];
+    if (data.length === 0) {
+      const { data: clientData, error } = await supabase
+        .from('representatives')
+        .select('id, name, code, user_id, status, photo_url')
+        .order('name');
+
+      if (error) {
+        console.error('Erro ao buscar representantes:', error);
+        return [];
+      }
+      data = clientData || [];
     }
 
     if (!data || data.length === 0) return [];

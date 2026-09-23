@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getClients } from '@/lib/clients.services';
 import { calculateClientCommercialStatus } from '@/lib/client-metrics.utils';
+import { fetchRegionalAnalyticsServer } from '@/lib/orders.functions';
 
 export interface CityMetric {
   name: string;
@@ -145,32 +146,53 @@ export async function getDetailedRegionalAnalytics(): Promise<{
   totalNationalRevenue: number;
   totalNationalOrders: number;
   totalNationalClients: number;
+  totalNationalCommission: number;
 }> {
-  // 1. Buscar Clientes
-  const { data: allClients } = await getClients({ pageSize: 1500 });
-
-  // 2. Buscar Pedidos reais aprovados/faturados
+  let allClients: any[] = [];
   let orders: any[] = [];
+  let commissions: any[] = [];
+  let dbRegions: any[] = [];
+
   try {
-    const { data } = await supabase
-      .from('orders')
-      .select('id, client_id, total_amount, created_at, status')
-      .neq('status', 'cancelled');
-    if (data) orders = data;
-  } catch (err) {
-    console.warn('Orders fetch error:', err);
+    const serverData = await fetchRegionalAnalyticsServer();
+    if (serverData) {
+      allClients = serverData.clients || [];
+      orders = serverData.orders || [];
+      commissions = serverData.commissions || [];
+      dbRegions = serverData.dbRegions || [];
+    }
+  } catch (errServer) {
+    console.warn("[getDetailedRegionalAnalytics] server fallback:", errServer);
   }
 
-  // 3. Buscar Comissões
-  let commissions: any[] = [];
-  try {
-    const { data } = await supabase
-      .from('commissions')
-      .select('order_id, commission_value')
-      .neq('status', 'cancelled');
-    if (data) commissions = data;
-  } catch (err) {
-    console.warn('Commissions fetch error:', err);
+  // Fallback se necessário
+  if (allClients.length === 0) {
+    const { data: clientsRes } = await getClients({ pageSize: 1500 });
+    allClients = clientsRes || [];
+  }
+
+  if (orders.length === 0) {
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, client_id, total_amount, created_at, status')
+        .neq('status', 'cancelled');
+      if (data) orders = data;
+    } catch (err) {
+      console.warn('Orders fetch error:', err);
+    }
+  }
+
+  if (commissions.length === 0) {
+    try {
+      const { data } = await supabase
+        .from('commissions')
+        .select('order_id, commission_value')
+        .neq('status', 'cancelled');
+      if (data) commissions = data;
+    } catch (err) {
+      console.warn('Commissions fetch error:', err);
+    }
   }
 
   const orderCommissionMap = new Map<string, number>();
@@ -391,13 +413,17 @@ export async function getDetailedRegionalAnalytics(): Promise<{
   const totalNationalRevenue = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
   const totalNationalOrders = orders.length;
   const totalNationalClients = allClients.length;
+  const totalNationalCommission = commissions.length > 0
+    ? commissions.reduce((sum, c) => sum + Number(c.commission_value || 0), 0)
+    : totalNationalRevenue * 0.05;
 
   return {
     regions,
     statesMetrics,
     totalNationalRevenue,
     totalNationalOrders,
-    totalNationalClients
+    totalNationalClients,
+    totalNationalCommission
   };
 }
 

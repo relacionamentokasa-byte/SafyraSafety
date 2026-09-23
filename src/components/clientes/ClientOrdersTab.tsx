@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchClientOrdersServer } from '@/lib/orders.functions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -12,6 +13,13 @@ export function ClientOrdersTab({ clientId }: { clientId: string }) {
   const { data: orders, isLoading } = useQuery({
     queryKey: ['client-orders', clientId],
     queryFn: async () => {
+      try {
+        const res = await fetchClientOrdersServer({ data: { clientId } });
+        if (res && res.length > 0) return res;
+      } catch (err) {
+        console.warn("fetchClientOrdersServer fallback:", err);
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -22,7 +30,7 @@ export function ClientOrdersTab({ clientId }: { clientId: string }) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as any[];
+      return (data || []) as any[];
     }
   });
 

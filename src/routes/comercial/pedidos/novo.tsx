@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { OrderPDFImportModal } from "@/components/pedidos/OrderPDFImportModal";
+import { UploadCloud } from "lucide-react";
 
 export const Route = createFileRoute("/comercial/pedidos/novo")({
   head: () => ({
@@ -126,6 +128,7 @@ function NewOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
 
   const methods = useForm<OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
@@ -293,11 +296,23 @@ function NewOrderPage() {
             </Button>
             <h1 className="text-2xl font-bold">Novo Pedido</h1>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ShoppingCart className="h-4 w-4" />
-            <span>
-              Passo {currentStep + 1} de {steps.length}
-            </span>
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPdfModalOpen(true)}
+              className="gap-2 border-primary/20 text-primary hover:bg-primary/5 shadow-xs font-semibold"
+            >
+              <UploadCloud className="h-4 w-4" />
+              Importar via PDF da Fábrica
+            </Button>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <ShoppingCart className="h-4 w-4" />
+              <span>
+                Passo {currentStep + 1} de {steps.length}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -394,6 +409,11 @@ function NewOrderPage() {
             </div>
           </form>
         </FormProvider>
+
+        <OrderPDFImportModal
+          open={isPdfModalOpen}
+          onOpenChange={setIsPdfModalOpen}
+        />
       </div>
     </AppLayout>
   );

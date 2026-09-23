@@ -32,6 +32,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { OrderStatus } from '@/types/database.types';
 import { getOrderWhatsAppUrl, generateOrderPayments, getOrderErrorMessage, deleteOrderPermanentlyDirect } from '@/lib/orders.services';
+import { fetchOrderDetailsServer } from '@/lib/orders.functions';
 import { useCurrentProfile } from '@/hooks/useCurrentProfile';
 import { formatPaymentPlanSchedule } from '@/lib/payment-plans';
 import { formatDisplayName } from '@/lib/format';
@@ -174,6 +175,13 @@ function OrderDetailsPage() {
   const { data: order, isLoading, error: orderError } = useQuery({
     queryKey: ['order', id],
     queryFn: async () => {
+      try {
+        const res = await fetchOrderDetailsServer({ data: { orderId: id } });
+        if (res) return res as any;
+      } catch (err) {
+        console.warn("fetchOrderDetailsServer fallback:", err);
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .select(`

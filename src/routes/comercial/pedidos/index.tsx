@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -25,8 +25,11 @@ import { cn } from '@/lib/utils';
 import { ManufacturerLogo } from '@/components/manufacturers/ManufacturerLogo';
 import { resolveOrderManufacturer } from '@/lib/order-manufacturers.utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchOrdersServer } from '@/lib/orders.functions';
 import { deleteOrderPermanentlyDirect } from '@/lib/orders.services';
 import { formatClientDisplayName } from '@/lib/format-name';
+import { OrderPDFImportModal } from '@/components/pedidos/OrderPDFImportModal';
+import { UploadCloud } from 'lucide-react';
 import { RepresentativeBadge } from '@/components/representantes/RepresentativeBadge';
 import { FieldQuickActions } from '@/components/common/FieldQuickActions';
 import { toast } from 'sonner';
@@ -90,6 +93,7 @@ const statusStyles: Record<OrderStatus, { label: string; badgeClass: string; dot
 };
 
 function OrdersPage() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearch = useDeferredValue(searchTerm);
   const [page, setPage] = useState(0);
@@ -98,13 +102,14 @@ function OrdersPage() {
   const currentMonthNum = new Date().getMonth() + 1;
   const currentYearNum = new Date().getFullYear();
 
-  // Estados dos filtros - Padrão inteligente: Mês e Ano correntes
+  // Estados dos filtros - Padrão: Mês e Ano vigentes
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [manufacturerFilter, setManufacturerFilter] = useState<string>('all');
-  const [monthFilter, setMonthFilter] = useState<string>('all');
-  const [yearFilter, setYearFilter] = useState<string>('all');
+  const [monthFilter, setMonthFilter] = useState<string>(String(currentMonthNum));
+  const [yearFilter, setYearFilter] = useState<string>(String(currentYearNum));
 
   const [orderToDelete, setOrderToDelete] = useState<{ id: string; order_number: string } | null>(null);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const deleteOrderMutation = useMutation({
@@ -141,20 +146,111 @@ function OrdersPage() {
   });
 
   const { data: allOrdersData } = useQuery({
-    queryKey: ['orders-all-stats'],
+    queryKey: ['orders-all-stats', deferredSearch, manufacturerFilter, monthFilter, yearFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      try {
+        const res = await fetchOrdersServer({
+          data: {
+            pageSize: 1,
+            search: deferredSearch,
+            month: monthFilter,
+            year: yearFilter,
+            manufacturerId: manufacturerFilter,
+          }
+        });
+        if (res && res.stats) {
+          return res.stats;
+        }
+      } catch (e) {
+        console.warn("fetchOrdersServer stats fallback:", e);
+      }
+
+      let query = supabase
         .from('orders')
-        .select('total_amount, status, created_at');
+        .select('total_amount, status, created_at, order_number, billing_notes');
+
+      if (deferredSearch) {
+        query = query.or(`order_number.ilike.%${deferredSearch}%,billing_notes.ilike.%${deferredSearch}%`);
+      }
+
+      if (manufacturerFilter !== 'all') {
+        const { data: comms } = await supabase
+          .from('commissions')
+          .select('order_id')
+          .eq('manufacturer_id', manufacturerFilter);
+
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('order_id, product:products(manufacturer_id)');
+
+        const orderIdsSet = new Set<string>();
+        comms?.forEach(c => {
+          if (c.order_id) orderIdsSet.add(c.order_id);
+        });
+        items?.forEach(it => {
+          if ((it.product as any)?.manufacturer_id === manufacturerFilter && it.order_id) {
+            orderIdsSet.add(it.order_id);
+          }
+        });
+
+        const matchedOrderIds = Array.from(orderIdsSet);
+        if (matchedOrderIds.length > 0) {
+          query = query.in('id', matchedOrderIds);
+        } else {
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+        }
+      }
+
+      if (yearFilter !== 'all' && monthFilter !== 'all') {
+        const y = Number(yearFilter);
+        const m = Number(monthFilter);
+        const startDate = new Date(y, m - 1, 1).toISOString();
+        const endDate = new Date(y, m, 0, 23, 59, 59, 999).toISOString();
+        query = query.gte('created_at', startDate).lte('created_at', endDate);
+      } else if (yearFilter !== 'all') {
+        const y = Number(yearFilter);
+        const startDate = new Date(y, 0, 1).toISOString();
+        const endDate = new Date(y, 11, 31, 23, 59, 59, 999).toISOString();
+        query = query.gte('created_at', startDate).lte('created_at', endDate);
+      } else if (monthFilter !== 'all') {
+        const y = new Date().getFullYear();
+        const m = Number(monthFilter);
+        const startDate = new Date(y, m - 1, 1).toISOString();
+        const endDate = new Date(y, m, 0, 23, 59, 59, 999).toISOString();
+        query = query.gte('created_at', startDate).lte('created_at', endDate);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data;
+      return data || [];
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: ordersData, isLoading, error: ordersError } = useQuery({
     queryKey: ['orders', deferredSearch, page, statusFilter, manufacturerFilter, monthFilter, yearFilter],
     queryFn: async () => {
+      // 1. Tentar primeiro via Server Function (Garante dados sem bloqueio de RLS)
+      try {
+        const res = await fetchOrdersServer({
+          data: {
+            search: deferredSearch,
+            status: statusFilter,
+            page,
+            pageSize,
+            month: monthFilter,
+            year: yearFilter,
+            manufacturerId: manufacturerFilter
+          }
+        });
+        if (res && res.data && res.data.length > 0) {
+          return { data: res.data, count: res.count };
+        }
+      } catch (errServer) {
+        console.warn("fetchOrdersServer fallback:", errServer);
+      }
+
+      // 2. Fallback direto Supabase client
       let query = supabase
         .from('orders')
         .select(`
@@ -186,18 +282,30 @@ function OrdersPage() {
 
       // Filtro por Fabricante
       if (manufacturerFilter !== 'all') {
-        const selectedMfg = manufacturers?.find(m => m.id === manufacturerFilter);
-        if (selectedMfg) {
-          const mfgName = selectedMfg.name.toUpperCase();
-          if (mfgName.includes('LIBUS')) {
-            query = query.or('order_number.ilike.%S2%,order_number.ilike.%LIB%,billing_notes.ilike.%Libus%');
-          } else if (mfgName.includes('NUTRIEX')) {
-            query = query.or('order_number.ilike.%NUT%,order_number.ilike.%PED-2%,billing_notes.ilike.%conferir as mercadorias%');
-          } else if (mfgName.includes('MEDIX')) {
-            query = query.or('order_number.ilike.%MED%,billing_notes.ilike.%Medix%');
-          } else if (mfgName.includes('VOLK')) {
-            query = query.or('order_number.ilike.%VOL%,billing_notes.ilike.%Volk%');
+        const { data: comms } = await supabase
+          .from('commissions')
+          .select('order_id')
+          .eq('manufacturer_id', manufacturerFilter);
+
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('order_id, product:products(manufacturer_id)');
+
+        const orderIdsSet = new Set<string>();
+        comms?.forEach(c => {
+          if (c.order_id) orderIdsSet.add(c.order_id);
+        });
+        items?.forEach(it => {
+          if ((it.product as any)?.manufacturer_id === manufacturerFilter && it.order_id) {
+            orderIdsSet.add(it.order_id);
           }
+        });
+
+        const matchedOrderIds = Array.from(orderIdsSet);
+        if (matchedOrderIds.length > 0) {
+          query = query.in('id', matchedOrderIds);
+        } else {
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000');
         }
       }
 
@@ -227,7 +335,7 @@ function OrdersPage() {
 
       const { data, error, count } = await query;
       if (error) throw error;
-      return { data, count };
+      return { data: data || [], count: count || 0 };
     },
     staleTime: 1000 * 60 * 2,
   });
@@ -264,12 +372,22 @@ function OrdersPage() {
               Gestão de pedidos, análise comercial, faturamento e acompanhamento de entregas.
             </p>
           </div>
-          <Button asChild className="h-10 px-4 gap-2 font-semibold shadow-xs">
-            <Link to="/comercial/pedidos/novo" search={{ opportunity_id: "" }}>
-              <Plus className="h-4 w-4" />
-              Novo Pedido
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsPdfModalOpen(true)}
+              className="h-10 px-4 gap-2 font-semibold border-primary/20 text-primary hover:bg-primary/5 shadow-xs"
+            >
+              <UploadCloud className="h-4 w-4" />
+              Importar via PDF
+            </Button>
+            <Button asChild className="h-10 px-4 gap-2 font-semibold shadow-xs">
+              <Link to="/comercial/pedidos/novo" search={{ opportunity_id: "" }}>
+                <Plus className="h-4 w-4" />
+                Novo Pedido
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* Barra de Filtro de Competência Rápida (Mês / Ano / Indústria) */}
@@ -355,7 +473,7 @@ function OrdersPage() {
               Status & Fluxo da Carteira
             </span>
             <span className="text-[11px] font-mono font-medium text-slate-400">
-              {allOrdersData?.length || 0} pedidos no total
+              {allOrdersData?.length || 0} pedidos no filtro
             </span>
           </div>
 
@@ -553,9 +671,13 @@ function OrdersPage() {
                         const mfg = getOrderManufacturerInfo(order);
 
                         return (
-                          <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
+                          <TableRow
+                            key={order.id}
+                            onClick={() => navigate({ to: '/comercial/pedidos/$id', params: { id: order.id } })}
+                            className="hover:bg-muted/50 transition-colors cursor-pointer group"
+                          >
                             <TableCell className="font-semibold text-foreground">
-                              <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted">
+                              <span className="font-mono text-xs px-2 py-0.5 rounded bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                                 {order.order_number}
                               </span>
                             </TableCell>
@@ -598,7 +720,7 @@ function OrdersPage() {
                                 {style.label}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold gap-1" asChild>
                                   <Link to="/comercial/pedidos/$id" params={{ id: order.id }}>
@@ -780,6 +902,12 @@ function OrdersPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Modal de Importação de Pedido via PDF da Indústria */}
+        <OrderPDFImportModal
+          open={isPdfModalOpen}
+          onOpenChange={setIsPdfModalOpen}
+        />
       </div>
     </AppLayout>
   );

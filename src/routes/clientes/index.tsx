@@ -23,7 +23,10 @@ import {
   ChevronRight,
   List,
   Map as MapIcon,
-  X
+  X,
+  Trash2,
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -59,9 +62,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { GoogleMap } from '@/components/campo/GoogleMap';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { enrichAllClientsGeocoding } from '@/lib/clients.functions';
+import {
+  enrichAllClientsGeocoding,
+  moveToTrashClient,
+  restoreFromTrashClient,
+  deleteClientPermanently,
+  emptyClientTrash
+} from '@/lib/clients.functions';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute('/clientes/')({
   validateSearch: (search: Record<string, unknown>): { view?: string } => {
@@ -94,6 +113,13 @@ function ClientsPage() {
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [isEnrichingCoords, setIsEnrichingCoords] = useState(false);
+
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [clientToTrash, setClientToTrash] = useState<any | null>(null);
+  const [clientToRestore, setClientToRestore] = useState<any | null>(null);
+  const [clientToDeletePermanent, setClientToDeletePermanent] = useState<any | null>(null);
+  const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const handleEnrichCoordinates = async () => {
     try {
@@ -154,18 +180,87 @@ function ClientsPage() {
     (cityFilter !== 'all' ? 1 : 0);
 
   const { data: clientsData, isLoading, refetch } = useQuery({
-    queryKey: ['clients-list', deferredSearch, page, statusFilter, regionFilter, stateFilter, cityFilter, pageSize],
+    queryKey: ['clients-list', deferredSearch, page, statusFilter, regionFilter, stateFilter, cityFilter, pageSize, isTrashView],
     queryFn: () => getClients({
       search: deferredSearch,
       status: statusFilter,
       region: regionFilter,
       state: stateFilter,
       city: cityFilter,
+      isTrash: isTrashView,
       page,
       pageSize
     }),
     staleTime: 1000 * 60 * 5,
   });
+
+  const { data: clientsAll, refetch: refetchStats } = useQuery({
+    queryKey: ['clients-all-simple'],
+    queryFn: () => getClientsStats(),
+  });
+
+  const handleMoveToTrash = async () => {
+    if (!clientToTrash) return;
+    try {
+      setIsActionLoading(true);
+      await moveToTrashClient({ data: { id: clientToTrash.id } });
+      toast.success(`"${clientToTrash.name || clientToTrash.trade_name}" movido para a lixeira.`);
+      setClientToTrash(null);
+      refetch();
+      refetchStats();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao mover para a lixeira.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!clientToRestore) return;
+    try {
+      setIsActionLoading(true);
+      await restoreFromTrashClient({ data: { id: clientToRestore.id } });
+      toast.success(`"${clientToRestore.name || clientToRestore.trade_name}" restaurado com sucesso!`);
+      setClientToRestore(null);
+      refetch();
+      refetchStats();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao restaurar cliente.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleDeletePermanently = async () => {
+    if (!clientToDeletePermanent) return;
+    try {
+      setIsActionLoading(true);
+      await deleteClientPermanently({ data: { id: clientToDeletePermanent.id } });
+      toast.success("Cliente e histórico excluídos permanentemente.");
+      setClientToDeletePermanent(null);
+      refetch();
+      refetchStats();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir cliente.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    try {
+      setIsActionLoading(true);
+      const res = await emptyClientTrash();
+      toast.success(res.message || "Lixeira esvaziada com sucesso.");
+      setIsEmptyingTrash(false);
+      refetch();
+      refetchStats();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao esvaziar lixeira.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
 
   const { data: mapClientsData = [], isLoading: isLoadingMap } = useQuery({
     queryKey: ['clients-map-all', deferredSearch, statusFilter, regionFilter, stateFilter, cityFilter],
@@ -253,11 +348,6 @@ function ClientsPage() {
   const totalCount = clientsData?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const { data: clientsAll } = useQuery({
-    queryKey: ['clients-all-simple'],
-    queryFn: () => getClientsStats(),
-  });
-
   const stats = [
     { label: 'Total de Clientes', value: (clientsAll?.total || 0).toString(), icon: Users, color: 'text-blue-500' },
     { label: 'Clientes Ativos', value: (clientsAll?.active || 0).toString(), icon: UserCheck, color: 'text-green-500' },
@@ -278,10 +368,11 @@ function ClientsPage() {
           <div className="flex gap-2 items-center flex-wrap">
             <div className="flex bg-muted p-1 rounded-lg border gap-1 mr-2">
               <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                variant={!isTrashView && viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
                 className="gap-2 h-8 text-xs font-semibold"
                 onClick={() => {
+                  setIsTrashView(false);
                   setViewMode('list');
                   navigate({ to: '/clientes', search: {} as any, replace: true });
                 }}
@@ -289,41 +380,76 @@ function ClientsPage() {
                 <List size={14}/> Lista
               </Button>
               <Button
-                variant={viewMode === 'map' ? 'default' : 'ghost'}
+                variant={!isTrashView && viewMode === 'map' ? 'default' : 'ghost'}
                 size="sm"
                 className="gap-2 h-8 text-xs font-semibold"
                 onClick={() => {
+                  setIsTrashView(false);
                   setViewMode('map');
                   navigate({ to: '/clientes', search: { view: 'map' } as any, replace: true });
                 }}
               >
                 <MapIcon size={14}/> Mapa
               </Button>
+              <Button
+                variant={isTrashView ? 'destructive' : 'ghost'}
+                size="sm"
+                className={cn(
+                  "gap-2 h-8 text-xs font-semibold transition-colors",
+                  isTrashView ? "bg-red-600 text-white" : "text-muted-foreground hover:text-red-600"
+                )}
+                onClick={() => {
+                  setIsTrashView(true);
+                  setViewMode('list');
+                }}
+              >
+                <Trash2 size={14} />
+                Lixeira
+                {(clientsAll?.trashed || 0) > 0 && (
+                  <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[10px] rounded-full bg-red-100 text-red-700 font-bold ml-0.5">
+                    {clientsAll?.trashed}
+                  </Badge>
+                )}
+              </Button>
             </div>
 
-            <Button
-              variant="outline"
-              onClick={handleEnrichCoordinates}
-              disabled={isEnrichingCoords}
-              className="gap-2 text-xs"
-              title="Atualizar Latitude e Longitude de todos os clientes via CNPJ/CEP"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", isEnrichingCoords && "animate-spin")} />
-              {isEnrichingCoords ? "Geocodificando..." : "Atualizar GPS (CNPJs)"}
-            </Button>
+            {isTrashView ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={(clientsAll?.trashed || 0) === 0 || isActionLoading}
+                onClick={() => setIsEmptyingTrash(true)}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Esvaziar Lixeira
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleEnrichCoordinates}
+                  disabled={isEnrichingCoords}
+                  className="gap-2 text-xs"
+                  title="Atualizar Latitude e Longitude de todos os clientes via CNPJ/CEP"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", isEnrichingCoords && "animate-spin")} />
+                  {isEnrichingCoords ? "Geocodificando..." : "Atualizar GPS (CNPJs)"}
+                </Button>
 
-            <Button variant="outline" className="hidden lg:flex" asChild>
-              <Link to="/campo/roteirizacao">
-                <Navigation className="mr-2 h-4 w-4" />
-                Planejar Rota
-              </Link>
-            </Button>
-            <Button className="flex-1 md:flex-none bg-primary text-primary-foreground font-semibold shadow-xs" asChild>
-              <Link to="/clientes/novo">
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Cliente
-              </Link>
-            </Button>
+                <Button variant="outline" className="hidden lg:flex" asChild>
+                  <Link to="/campo/roteirizacao">
+                    <Navigation className="mr-2 h-4 w-4" />
+                    Planejar Rota
+                  </Link>
+                </Button>
+                <Button className="flex-1 md:flex-none bg-primary text-primary-foreground font-semibold shadow-xs" asChild>
+                  <Link to="/clientes/novo">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Novo Cliente
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -715,50 +841,86 @@ function ClientsPage() {
                           -
                         </TableCell>
                         <TableCell>
-                          <span className="text-xs font-semibold text-slate-700">
-                            {client.status === 'active' ? 'Ativo' : client.status === 'prospect' ? 'Prospect' : 'Inativo'}
-                          </span>
+                          {isTrashView ? (
+                            <Badge variant="destructive" className="text-[10px] bg-red-100 text-red-700 font-bold border-red-200">
+                              Na Lixeira
+                            </Badge>
+                          ) : (
+                            <span className="text-xs font-semibold text-slate-700">
+                              {client.status === 'active' ? 'Ativo' : client.status === 'prospect' ? 'Prospect' : 'Inativo'}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
+                          {isTrashView ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1 border-green-200 text-green-700 hover:bg-green-50"
+                                onClick={() => setClientToRestore(client)}
+                                title="Restaurar Cliente"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" /> Restaurar
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                              <DropdownMenuItem asChild>
-                                <Link to="/clientes/$id" params={{ id: client.id }}>
-                                  <Eye className="mr-2 h-4 w-4 text-primary" /> Visualizar
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setEditingClient(client)}>
-                                <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link to="/clientes/$id" params={{ id: client.id }}>
-                                  <History className="mr-2 h-4 w-4 text-primary" /> Histórico
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <Link to="/campo/visitas/novo" search={{ clientId: client.id }}>
-                                  <Calendar className="mr-2 h-4 w-4 text-primary" /> Agendar Visita
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link to="/clientes/$id" params={{ id: client.id }}>
-                                  <FileText className="mr-2 h-4 w-4 text-primary" /> Follow-up
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <Link to="/comercial/pedidos/novo" search={{ client_id: client.id, opportunity_id: "" }}>
-                                  <ShoppingBag className="mr-2 h-4 w-4 text-primary" /> Novo Pedido
-                                </Link>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs gap-1 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => setClientToDeletePermanent(client)}
+                                title="Excluir Definitivamente"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Excluir
+                              </Button>
+                            </div>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/clientes/$id" params={{ id: client.id }}>
+                                    <Eye className="mr-2 h-4 w-4 text-primary" /> Visualizar
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setEditingClient(client)}>
+                                  <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/clientes/$id" params={{ id: client.id }}>
+                                    <History className="mr-2 h-4 w-4 text-primary" /> Histórico
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link to="/campo/visitas/novo" search={{ clientId: client.id }}>
+                                    <Calendar className="mr-2 h-4 w-4 text-primary" /> Agendar Visita
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/clientes/$id" params={{ id: client.id }}>
+                                    <FileText className="mr-2 h-4 w-4 text-primary" /> Follow-up
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/comercial/pedidos/novo" search={{ client_id: client.id, opportunity_id: "" }}>
+                                    <ShoppingBag className="mr-2 h-4 w-4 text-primary" /> Novo Pedido
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer"
+                                  onClick={() => setClientToTrash(client)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Mover para Lixeira
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -812,24 +974,44 @@ function ClientsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem asChild>
-                              <Link to="/clientes/$id" params={{ id: client.id }}>
-                                <Eye className="mr-2 h-4 w-4 text-primary" /> Visualizar Perfil
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setEditingClient(client)}>
-                              <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link to="/campo/visitas/novo" search={{ clientId: client.id }}>
-                                <Calendar className="mr-2 h-4 w-4 text-primary" /> Agendar Visita
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link to="/comercial/pedidos/novo" search={{ client_id: client.id, opportunity_id: "" }}>
-                                <ShoppingBag className="mr-2 h-4 w-4 text-primary" /> Novo Pedido
-                              </Link>
-                            </DropdownMenuItem>
+                            {isTrashView ? (
+                              <>
+                                <DropdownMenuItem onClick={() => setClientToRestore(client)} className="text-green-700">
+                                  <RotateCcw className="mr-2 h-4 w-4" /> Restaurar Cliente
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setClientToDeletePermanent(client)} className="text-red-600">
+                                  <Trash2 className="mr-2 h-4 w-4" /> Excluir Definitivo
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/clientes/$id" params={{ id: client.id }}>
+                                    <Eye className="mr-2 h-4 w-4 text-primary" /> Visualizar Perfil
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setEditingClient(client)}>
+                                  <Edit className="mr-2 h-4 w-4 text-primary" /> Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/campo/visitas/novo" search={{ clientId: client.id }}>
+                                    <Calendar className="mr-2 h-4 w-4 text-primary" /> Agendar Visita
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link to="/comercial/pedidos/novo" search={{ client_id: client.id, opportunity_id: "" }}>
+                                    <ShoppingBag className="mr-2 h-4 w-4 text-primary" /> Novo Pedido
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                                  onClick={() => setClientToTrash(client)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Mover para Lixeira
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -933,6 +1115,116 @@ function ClientsPage() {
             />
           )}
         </ResponsiveModal>
+
+        {/* Confirmação de Enviar para Lixeira */}
+        <AlertDialog open={!!clientToTrash} onOpenChange={(open) => !open && setClientToTrash(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+                <Trash2 className="h-5 w-5" />
+                Mover cliente para a Lixeira?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Você está prestes a mover <strong>"{clientToTrash?.name || clientToTrash?.legal_name || clientToTrash?.trade_name}"</strong> para a lixeira.
+                O cliente deixará de aparecer na listagem principal e nas rotas, mas todo o histórico de compras permanecerá seguro e poderá ser restaurado a qualquer momento.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionLoading}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleMoveToTrash}
+                disabled={isActionLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Mover para Lixeira
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmação de Restaurar da Lixeira */}
+        <AlertDialog open={!!clientToRestore} onOpenChange={(open) => !open && setClientToRestore(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-green-600">
+                <RotateCcw className="h-5 w-5" />
+                Restaurar cliente da Lixeira?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                O cliente <strong>"{clientToRestore?.name || clientToRestore?.legal_name || clientToRestore?.trade_name}"</strong> será restaurado com status <strong>Ativo</strong> e voltará para a lista principal e mapas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionLoading}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRestore}
+                disabled={isActionLoading}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Restaurar Cliente
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmação de Exclusão Definitiva Individual */}
+        <AlertDialog open={!!clientToDeletePermanent} onOpenChange={(open) => !open && setClientToDeletePermanent(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                Excluir permanentemente?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  Esta ação é <strong>irreversível</strong>. Todos os pedidos, itens, parcelas e histórico vinculados a <strong>"{clientToDeletePermanent?.name || clientToDeletePermanent?.legal_name}"</strong> serão apagados do banco de dados para sempre.
+                </p>
+                <p className="text-xs text-red-600 font-semibold">
+                  Tem certeza absoluta que deseja prosseguir?
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionLoading}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeletePermanently}
+                disabled={isActionLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Excluir Definitivamente
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmação de Esvaziar Lixeira Inteira */}
+        <AlertDialog open={isEmptyingTrash} onOpenChange={(open) => !open && setIsEmptyingTrash(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                Esvaziar toda a Lixeira?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Todos os <strong>{clientsAll?.trashed || 0} clientes</strong> atualmente na lixeira e seus dados associados serão permanentemente excluídos. Esta ação não poderá ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isActionLoading}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleEmptyTrash}
+                disabled={isActionLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Esvaziar Agora
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );

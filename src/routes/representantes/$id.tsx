@@ -6,6 +6,7 @@ import { RepresentativeForm } from '@/components/representantes/RepresentativeFo
 import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchRepresentativeDetailServer } from '@/lib/orders.functions';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -60,119 +61,30 @@ export const Route = createFileRoute('/representantes/$id')({
 function RepresentativeProfilePage() {
   const { id } = useParams({ from: '/representantes/$id' });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
   const queryClient = useQueryClient();
 
-  // Consulta do Representante
-  const { data: rep, isLoading } = useQuery({
-    queryKey: ['representative-detail', id],
+  // Consulta do Representante com Server Function
+  const { data: serverRepData, isLoading } = useQuery({
+    queryKey: ['representative-detail-server', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('representatives')
-        .select(`
-          *,
-          regions(name, state)
-        `)
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      if (!data) return null;
-
-      let profileData = null;
-      if (data.user_id) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_path')
-          .eq('id', data.user_id)
-          .maybeSingle();
-        profileData = profile;
+      try {
+        const res = await fetchRepresentativeDetailServer({ data: { representativeId: id } });
+        if (res) return res;
+      } catch (errServer) {
+        console.warn("[fetchRepresentativeDetailServer] fallback:", errServer);
       }
-
-      return {
-        ...data,
-        profiles: profileData,
-      };
-    },
-  });
-
-  // Clientes da carteira deste representante
-  const { data: repClients = [] } = useQuery({
-    queryKey: ['representative-clients', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('representative_id', id)
-        .order('name');
-      if (error) throw error;
-      return data || [];
+      return null;
     }
   });
 
-  // Pedidos e vendas deste representante
-  const { data: repOrders = [] } = useQuery({
-    queryKey: ['representative-orders', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          client:clients(name)
-        `)
-        .eq('representative_id', id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  // Visitas deste representante
-  const { data: repVisits = [] } = useQuery({
-    queryKey: ['representative-visits', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('visits')
-        .select(`
-          *,
-          client:clients(name)
-        `)
-        .eq('representative_id', id)
-        .order('scheduled_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  // Follow-ups deste representante
-  const { data: repFollowUps = [] } = useQuery({
-    queryKey: ['representative-followups', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('follow_ups')
-        .select(`
-          *,
-          client:clients(name)
-        `)
-        .eq('representative_id', id)
-        .order('scheduled_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  // Metas do representante
-  const { data: repGoals = [] } = useQuery({
-    queryKey: ['representative-goals', id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('representative_id', id)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    }
-  });
+  const rep = serverRepData?.representative;
+  const repClients = serverRepData?.clients || [];
+  const repOrders = serverRepData?.orders || [];
+  const repCommissions = serverRepData?.commissions || [];
+  const repVisits = serverRepData?.visits || [];
+  const repFollowUps = serverRepData?.followUps || [];
+  const repGoals = serverRepData?.goals || [];
 
   if (isLoading) {
     return (
@@ -199,7 +111,9 @@ function RepresentativeProfilePage() {
 
   // Cálculos de métricas
   const totalSales = repOrders.reduce((acc, order) => acc + (Number(order.total_amount) || 0), 0);
-  const totalCommission = totalSales * ((Number(rep.commission_rate) || 5) / 100);
+  const totalCommission = repCommissions.length > 0
+    ? repCommissions.reduce((acc, comm) => acc + (Number(comm.commission_value) || 0), 0)
+    : totalSales * 0.05;
   const monthlyGoal = Number(rep.monthly_goal) || (repGoals[0]?.target_value ? Number(repGoals[0].target_value) : 0);
   const goalPercent = monthlyGoal > 0 ? Math.min(100, Math.round((totalSales / monthlyGoal) * 100)) : 0;
 
@@ -302,10 +216,11 @@ function RepresentativeProfilePage() {
 
         {/* Abas de Detalhes */}
         <div className="flex-1 bg-muted/30">
-          <Tabs defaultValue="overview" className="h-full flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <div className="px-4 md:px-8 bg-card border-b overflow-x-auto no-scrollbar">
               <TabsList className="h-12 bg-transparent gap-6">
                 <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-1">Visão Geral</TabsTrigger>
+                <TabsTrigger value="goals" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-1">Metas & Fabricantes</TabsTrigger>
                 <TabsTrigger value="clients" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-1">Clientes</TabsTrigger>
                 <TabsTrigger value="orders" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-1">Pedidos</TabsTrigger>
                 <TabsTrigger value="visits" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-1">Visitas</TabsTrigger>
@@ -377,6 +292,77 @@ function RepresentativeProfilePage() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* Aba de Metas por Fabricante */}
+              <TabsContent value="goals" className="m-0 space-y-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-medium text-foreground">Metas Definidas por Período e Fabricante</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">Acompanhamento dos objetivos comerciais estipulados para este representante.</p>
+                    </div>
+                    <Button size="sm" asChild>
+                      <Link to="/comercial/metas">Gerenciar Metas</Link>
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Período</TableHead>
+                          <TableHead>Fabricante</TableHead>
+                          <TableHead>Meta Estipulada</TableHead>
+                          <TableHead>Realizado</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {repGoals.map((goal: any) => {
+                          const achieved = Number(goal.achieved_value) || 0;
+                          const target = Number(goal.target_value) || 0;
+                          const pct = target > 0 ? (achieved / target) * 100 : 0;
+                          return (
+                            <TableRow key={goal.id}>
+                              <TableCell className="font-mono text-xs font-semibold">
+                                {goal.month}/{goal.year}
+                              </TableCell>
+                              <TableCell>
+                                {goal.manufacturer ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                                    {goal.manufacturer.trade_name || goal.manufacturer.name}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                                    Geral
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm font-medium">
+                                R$ {target.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="font-mono text-sm font-bold text-slate-900">
+                                R$ {achieved.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={pct >= 100 ? "default" : "secondary"} className="text-[10px]">
+                                  {pct.toFixed(0)}% batido
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {repGoals.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">
+                              Nenhuma meta individual ou por fabricante cadastrada para este representante.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Aba de Clientes */}

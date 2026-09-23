@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { RepresentativeForm } from '@/components/representantes/RepresentativeForm';
 import { ResponsiveModal } from '@/components/common/ResponsiveModal';
+import { fetchRepresentativesServer } from '@/lib/orders.functions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +59,13 @@ function RepresentativesPage() {
   const { data: representatives, isLoading } = useQuery({
     queryKey: ['representatives-list'],
     queryFn: async () => {
+      try {
+        const serverData = await fetchRepresentativesServer();
+        if (serverData && serverData.length > 0) return serverData;
+      } catch (errServer) {
+        console.warn("[representatives-list] fallback client-side:", errServer);
+      }
+
       const { data, error } = await supabase
         .from('representatives')
         .select(`

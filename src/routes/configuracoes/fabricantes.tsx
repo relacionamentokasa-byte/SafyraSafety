@@ -49,6 +49,7 @@ import { uploadFile } from "@/lib/storage";
 import { ManufacturerLogo } from "@/components/manufacturers/ManufacturerLogo";
 import { useServerFn } from "@tanstack/react-start";
 import { getCompanyByCnpj } from "@/lib/cnpj.functions";
+import { fetchManufacturersServer } from "@/lib/orders.functions";
 
 const manufacturerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -131,6 +132,13 @@ function ManufacturersPage() {
   const { data: manufacturers, isLoading } = useQuery({
     queryKey: ['manufacturers'],
     queryFn: async () => {
+      try {
+        const serverData = await fetchManufacturersServer();
+        if (serverData && serverData.length > 0) return serverData;
+      } catch (errServer) {
+        console.warn("[manufacturers] Server fallback:", errServer);
+      }
+
       const { data, error } = await supabase
         .from('manufacturers')
         .select('*')

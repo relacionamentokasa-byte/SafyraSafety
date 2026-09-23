@@ -59,6 +59,7 @@ import {
 import { ManufacturerLogo } from "@/components/manufacturers/ManufacturerLogo";
 import { calculateClientCommercialStatus } from "@/lib/client-metrics.utils";
 import { resolveOrderManufacturer } from "@/lib/order-manufacturers.utils";
+import { fetchReportDataServer } from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/relatorios/")({
   head: () => ({
@@ -98,9 +99,26 @@ function ReportsPage() {
   });
 
   // 2. Consulta Geral de Pedidos com Filtro
-  const { data: ordersData, isLoading: isLoadingOrders } = useQuery({
-    queryKey: ['report-orders-bi', manufacturerFilter, startDate, endDate],
+  const { data: serverReportData } = useQuery({
+    queryKey: ['report-server-data-bi', startDate, endDate],
     queryFn: async () => {
+      try {
+        const res = await fetchReportDataServer({ data: { startDate, endDate } });
+        return res;
+      } catch (e) {
+        console.warn("fetchReportDataServer fallback:", e);
+        return null;
+      }
+    }
+  });
+
+  const { data: ordersData, isLoading: isLoadingOrders } = useQuery({
+    queryKey: ['report-orders-bi', manufacturerFilter, startDate, endDate, serverReportData?.orders?.length],
+    queryFn: async () => {
+      if (serverReportData?.orders && serverReportData.orders.length > 0) {
+        return serverReportData.orders;
+      }
+
       let query = supabase
         .from('orders')
         .select(`
@@ -138,8 +156,12 @@ function ReportsPage() {
 
   // 3. Consulta de Itens dos Pedidos com Produtos e Fabricantes (com estimativa inteligente se a tabela de itens ainda não foi preenchida)
   const { data: orderItemsData, isLoading: isLoadingItems } = useQuery({
-    queryKey: ['report-order-items-bi', manufacturerFilter, startDate, endDate, ordersData?.length],
+    queryKey: ['report-order-items-bi', manufacturerFilter, startDate, endDate, ordersData?.length, serverReportData?.items?.length],
     queryFn: async () => {
+      if (serverReportData?.items && serverReportData.items.length > 0) {
+        return serverReportData.items;
+      }
+
       // 1. Tentar carregar itens reais cadastrados na tabela order_items
       let query = supabase
         .from('order_items')
@@ -272,8 +294,12 @@ function ReportsPage() {
 
   // 4. Consulta de Comissões por Pedido para cálculo de share e lucratividade
   const { data: commissionsData } = useQuery({
-    queryKey: ['report-commissions-share', startDate, endDate],
+    queryKey: ['report-commissions-share', startDate, endDate, serverReportData?.commissions?.length],
     queryFn: async () => {
+      if (serverReportData?.commissions && serverReportData.commissions.length > 0) {
+        return serverReportData.commissions.filter((c: any) => c.status !== 'cancelled');
+      }
+
       const { data, error } = await supabase
         .from('commissions')
         .select('id, order_id, commission_value, status, manufacturer_id');
@@ -284,23 +310,34 @@ function ReportsPage() {
 
   // 5. Clientes e Análise Real de Churn
   const { data: clientAnalysis } = useQuery({
-    queryKey: ['report-client-churn-analysis'],
+    queryKey: ['report-client-churn-analysis', serverReportData?.clients?.length, serverReportData?.orders?.length],
     queryFn: async () => {
-      const { data: clients, error: cErr } = await supabase
-        .from('clients')
-        .select('id, name, trade_name, cnpj, created_at, status');
-      if (cErr) throw cErr;
+      let clients: any[] = [];
+      let orders: any[] = [];
 
-      const { data: orders, error: oErr } = await supabase
-        .from('orders')
-        .select('id, client_id, total_amount, created_at, status')
-        .neq('status', 'cancelled');
-      if (oErr) throw oErr;
+      if (serverReportData?.clients && serverReportData.clients.length > 0) {
+        clients = serverReportData.clients;
+        orders = serverReportData.orders || [];
+      } else {
+        const { data: cData, error: cErr } = await supabase
+          .from('clients')
+          .select('id, name, trade_name, cnpj, created_at, status');
+        if (cErr) throw cErr;
+        clients = cData || [];
+
+        const { data: oData, error: oErr } = await supabase
+          .from('orders')
+          .select('id, client_id, total_amount, created_at, status')
+          .neq('status', 'cancelled');
+        if (oErr) throw oErr;
+        orders = oData || [];
+      }
 
       const now = new Date();
       const clientLastOrder = new Map<string, { lastDate: string; totalAmount: number; count: number }>();
 
-      orders?.forEach(o => {
+      orders.forEach(o => {
+        if (!o.client_id) return;
         const prev = clientLastOrder.get(o.client_id) || { lastDate: o.created_at, totalAmount: 0, count: 0 };
         prev.count += 1;
         prev.totalAmount += Number(o.total_amount || 0);
@@ -355,10 +392,17 @@ function ReportsPage() {
     }
   });
 
-  // 5. Visitas vs Vendas
+  // 6. Visitas vs Vendas
   const { data: visitsData } = useQuery({
-    queryKey: ['report-visits-bi', startDate, endDate],
+    queryKey: ['report-visits-bi', startDate, endDate, serverReportData?.visits?.length],
     queryFn: async () => {
+      if (serverReportData?.visits) {
+        const vList = serverReportData.visits;
+        const totalVisits = vList.length || 0;
+        const completed = vList.filter((v: any) => v.status === 'completed').length || 0;
+        return { totalVisits, completed };
+      }
+
       let query = supabase.from('visits').select('id, client_id, scheduled_at, status');
       if (startDate) query = query.gte('scheduled_at', startDate);
       if (endDate) query = query.lte('scheduled_at', endDate);

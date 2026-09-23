@@ -173,22 +173,22 @@ export function Dashboard() {
                   </div>
 
                   <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                    <div className="flex justify-between items-center">
-                      <span>Liberado/Repasse:</span>
-                      <span className="font-mono font-medium text-foreground">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="truncate">Liberado/Repasse:</span>
+                      <span className="font-mono font-medium text-foreground shrink-0">
                         R$ {item.approved.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span>Aguardando Liquidez:</span>
-                      <span className="font-mono font-medium text-muted-foreground">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="truncate">Aguardando Liquidez:</span>
+                      <span className="font-mono font-medium text-muted-foreground shrink-0">
                         R$ {item.pending.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     {item.paid > 0 && (
-                      <div className="flex justify-between items-center text-emerald-600 font-medium">
-                        <span>Pago:</span>
-                        <span className="font-mono">
+                      <div className="flex justify-between items-center gap-2 text-emerald-600 font-medium">
+                        <span className="truncate">Pago:</span>
+                        <span className="font-mono shrink-0">
                           R$ {item.paid.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
