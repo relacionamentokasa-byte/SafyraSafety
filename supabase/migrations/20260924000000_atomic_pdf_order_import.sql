@@ -212,7 +212,7 @@ BEGIN
           sku,
           code,
           unit,
-          base_price,
+          price,
           manufacturer_id,
           status
         ) VALUES (
@@ -261,7 +261,7 @@ BEGIN
         sku,
         code,
         unit,
-        base_price,
+        price,
         manufacturer_id,
         status
       ) VALUES (

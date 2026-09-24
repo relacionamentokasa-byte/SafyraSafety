@@ -213,7 +213,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           sku: item.pdfCode || `SKU-${Date.now()}`,
           code: item.pdfCode || `SKU-${Date.now()}`,
           unit: 'UN',
-          base_price: itemUnitP,
+          price: itemUnitP,
           manufacturer_id: defaultManufacturerId,
           status: 'active'
         };
@@ -243,7 +243,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
         name: `Pedido #${matchedData.parsed.budgetNumber || 'Importado'} - Itens Diversos`,
         sku: `PED-${matchedData.parsed.budgetNumber || Date.now()}`,
         unit: 'UN',
-        base_price: fallbackAmount,
+        price: fallbackAmount,
         manufacturer_id: defaultManufacturerId,
         status: 'active'
       };
