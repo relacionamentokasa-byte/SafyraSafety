@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useNavigate } from '@tanstack/react-router';
 import { processOrderPDFServer, saveImportedOrderServer, type MatchedPDFOrderData } from '@/lib/pdf-order-importer.functions';
+import { extractTextFromPDFFile } from '@/lib/pdf-client-extractor';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -56,24 +57,21 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
     setMatchedData(null);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const base64 = (reader.result as string).split(',')[1];
-          const result = await processOrderPDFServer({ data: { base64Pdf: base64 } });
-          setMatchedData(result);
-          toast.success(`PDF "${file.name}" processado com sucesso!`);
-        } catch (err: any) {
-          console.error('Erro no parser do PDF:', err);
-          toast.error(err.message || 'Falha ao processar dados do PDF.');
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error(err);
-      toast.error('Não foi possível ler o arquivo PDF.');
+      // 1. Extrair o texto do PDF diretamente no navegador (rápido e 100% compatível com Serverless na Vercel)
+      const extractedText = await extractTextFromPDFFile(file);
+
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error('Não foi possível ler o texto do arquivo PDF selecionado.');
+      }
+
+      // 2. Enviar o texto extraído para a Server Function cruzar os dados no banco
+      const result = await processOrderPDFServer({ data: { rawText: extractedText } });
+      setMatchedData(result);
+      toast.success(`PDF "${file.name}" processado com sucesso!`);
+    } catch (err: any) {
+      console.error('Erro no processamento do PDF:', err);
+      toast.error(err.message || 'Falha ao processar dados do PDF.');
+    } finally {
       setIsProcessing(false);
     }
   };

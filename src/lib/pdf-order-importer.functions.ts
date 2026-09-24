@@ -357,24 +357,27 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
 export const processOrderPDFServer = createServerFn({ method: "POST" })
   .validator((data: { base64Pdf?: string; rawText?: string }) => data)
   .handler(async ({ data }): Promise<MatchedPDFOrderData> => {
-    let extractedText = data.rawText || '';
+    let extractedText = (data.rawText || '').trim();
 
     if (!extractedText && data.base64Pdf) {
-      // Usar pdfjs-dist no backend Node.js
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      const buffer = Buffer.from(data.base64Pdf, 'base64');
-      const uint8 = new Uint8Array(buffer);
-      const loadingTask = pdfjs.getDocument({ data: uint8 });
-      const pdfDoc = await loadingTask.promise;
+      try {
+        const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        const buffer = Buffer.from(data.base64Pdf, 'base64');
+        const uint8 = new Uint8Array(buffer);
+        const loadingTask = pdfjs.getDocument({ data: uint8 });
+        const pdfDoc = await loadingTask.promise;
 
-      let fullText = '';
-      for (let p = 1; p <= pdfDoc.numPages; p++) {
-        const page = await pdfDoc.getPage(p);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join('\n');
-        fullText += pageText + '\n';
+        let fullText = '';
+        for (let p = 1; p <= pdfDoc.numPages; p++) {
+          const page = await pdfDoc.getPage(p);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join('\n');
+          fullText += pageText + '\n';
+        }
+        extractedText = fullText.trim();
+      } catch (e) {
+        console.warn('Fallback server PDF parse falhou:', e);
       }
-      extractedText = fullText;
     }
 
     if (!extractedText) {
