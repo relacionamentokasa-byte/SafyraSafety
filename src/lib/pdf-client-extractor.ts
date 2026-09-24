@@ -2,7 +2,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 // Configurar o worker oficial de extração de PDF no navegador
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  const version = pdfjsLib.version || '4.10.38';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 }
 
 /**
