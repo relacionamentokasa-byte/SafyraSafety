@@ -149,35 +149,60 @@ BEGIN
   v_shipping_type := COALESCE(NULLIF(p_order_data->'parsed'->>'shippingType', ''), 'CIF');
   v_token := COALESCE(p_order_data->'parsed'->>'token', '-');
 
-  -- 5. Criar Pedido
-  INSERT INTO public.orders (
-    order_number,
-    client_id,
-    representative_id,
-    status,
-    subtotal_amount,
-    total_amount,
-    discount_amount,
-    payment_condition,
-    payment_term,
-    billing_notes,
-    created_by,
-    created_at
-  ) VALUES (
-    v_order_number,
-    v_client_id,
-    v_rep_id,
-    'delivered',
-    v_total_amount,
-    v_total_amount,
-    v_discount,
-    v_payment_condition,
-    v_shipping_type,
-    'Importado automaticamente via PDF da Indústria (Token: ' || v_token || ')',
-    p_user_id,
-    NOW()
-  )
-  RETURNING id INTO v_order_id;
+  -- 5. Criar Pedido (ou Atualizar se já existir com esse número de pedido/orçamento)
+  SELECT id INTO v_order_id
+  FROM public.orders
+  WHERE order_number = v_order_number
+  LIMIT 1;
+
+  IF v_order_id IS NOT NULL THEN
+    -- Limpar itens, parcelas e comissões anteriores para sobrescrever com o novo espelho completo
+    DELETE FROM public.order_items WHERE order_id = v_order_id;
+    DELETE FROM public.order_payments WHERE order_id = v_order_id;
+    DELETE FROM public.commissions WHERE order_id = v_order_id;
+
+    UPDATE public.orders
+    SET client_id = v_client_id,
+        representative_id = v_rep_id,
+        status = 'delivered',
+        subtotal_amount = v_total_amount,
+        total_amount = v_total_amount,
+        discount_amount = v_discount,
+        payment_condition = v_payment_condition,
+        payment_term = v_shipping_type,
+        billing_notes = 'Importado/Atualizado via PDF da Indústria (Token: ' || v_token || ')',
+        updated_at = NOW()
+    WHERE id = v_order_id;
+  ELSE
+    INSERT INTO public.orders (
+      order_number,
+      client_id,
+      representative_id,
+      status,
+      subtotal_amount,
+      total_amount,
+      discount_amount,
+      payment_condition,
+      payment_term,
+      billing_notes,
+      created_by,
+      created_at
+    ) VALUES (
+      v_order_number,
+      v_client_id,
+      v_rep_id,
+      'delivered',
+      v_total_amount,
+      v_total_amount,
+      v_discount,
+      v_payment_condition,
+      v_shipping_type,
+      'Importado automaticamente via PDF da Indústria (Token: ' || v_token || ')',
+      p_user_id,
+      NOW()
+    )
+    RETURNING id INTO v_order_id;
+  END IF;
 
   -- 6. Inserir Itens do Pedido
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_order_data->'matchedItems')
