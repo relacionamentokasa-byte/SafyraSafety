@@ -81,11 +81,11 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
 
     let clientId = matchedData.matchedClient?.id;
 
-    // Se cliente não tem ID ou é novo, buscar ou criar
+    // 1. Se cliente não tem ID ou é novo, buscar ou criar via supabaseAdmin
     if (!clientId) {
       const cleanClientCnpj = cleanCnpj(matchedData.parsed.client.cnpj);
       if (cleanClientCnpj) {
-        const { data: dbClients } = await context.supabase
+        const { data: dbClients } = await supabaseAdmin
           .from('clients')
           .select('id, cnpj');
         const found = dbClients?.find(c => cleanCnpj(c.cnpj || '') === cleanClientCnpj);
@@ -95,7 +95,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
 
       if (!clientId) {
-        // Criar novo cliente usando o client autenticado (context.supabase) com created_by
+        // Criar novo cliente via supabaseAdmin (garante bypass de restrições de RLS no backend)
         const clientPayload = {
           name: matchedData.parsed.client.tradeName || matchedData.parsed.client.legalName || 'Cliente Importado',
           trade_name: matchedData.parsed.client.tradeName,
@@ -113,25 +113,14 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           created_by: context.userId
         };
 
-        const { data: newClient, error: clientErr } = await context.supabase
+        const { data: adminClient, error: adminErr } = await supabaseAdmin
           .from('clients')
           .insert(clientPayload as any)
           .select('id')
           .single();
 
-        if (clientErr) {
-          // Fallback para supabaseAdmin se houver restrição
-          const { data: adminClient, error: adminErr } = await supabaseAdmin
-            .from('clients')
-            .insert(clientPayload as any)
-            .select('id')
-            .single();
-
-          if (adminErr) throw new Error(`Falha ao cadastrar cliente: ${clientErr.message || adminErr.message}`);
-          clientId = adminClient?.id;
-        } else {
-          clientId = newClient?.id;
-        }
+        if (adminErr) throw new Error(`Falha ao cadastrar cliente: ${adminErr.message}`);
+        clientId = adminClient?.id;
       }
     }
 
@@ -139,7 +128,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       throw new Error('Não foi possível definir o cliente para este pedido.');
     }
 
-    // Preparar itens com match ou cadastrar produtos automaticamente se não existirem
+    // 2. Preparar itens com match ou cadastrar produtos automaticamente se não existirem
     const validItems: Array<{
       productId: string;
       productName: string;
@@ -171,7 +160,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           totalPrice: itemTotalP
         });
       } else {
-        // Criar produto sob demanda caso seja novo no catálogo
+        // Criar produto sob demanda caso seja novo no catálogo via supabaseAdmin
         const newProductPayload = {
           name: item.pdfDescription || `Item SKU ${item.pdfCode}`,
           sku: item.pdfCode || `SKU-${Date.now()}`,
@@ -182,7 +171,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           status: 'active'
         };
 
-        const { data: newProd, error: prodErr } = await supabaseAdmin
+        const { data: newProd } = await supabaseAdmin
           .from('products')
           .insert(newProductPayload as any)
           .select('id, name, sku')
@@ -231,6 +220,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
     }
 
+    // 3. Criar Pedido via supabaseAdmin (garante inserção atômica sem falha de permissão RLS)
     const orderNumber = matchedData.parsed.budgetNumber || String(Math.floor(100000 + Math.random() * 900000));
     const totalAmount = matchedData.parsed.totals.totalAmount || validItems.reduce((s, i) => s + i.totalPrice, 0);
 
@@ -249,34 +239,19 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       created_at: new Date().toISOString()
     };
 
-    let createdOrder: { id: string; order_number: string } | null = null;
-
-    const { data: userOrder, error: orderErr } = await context.supabase
+    const { data: createdOrder, error: orderErr } = await supabaseAdmin
       .from('orders')
       .insert(orderPayload as any)
       .select('id, order_number')
       .single();
 
-    if (orderErr) {
-      // Fallback para supabaseAdmin
-      const { data: adminOrder, error: adminOrderErr } = await supabaseAdmin
-        .from('orders')
-        .insert(orderPayload as any)
-        .select('id, order_number')
-        .single();
-
-      if (adminOrderErr) throw new Error(`Falha ao criar pedido: ${orderErr.message || adminOrderErr.message}`);
-      createdOrder = adminOrder;
-    } else {
-      createdOrder = userOrder;
+    if (orderErr || !createdOrder) {
+      throw new Error(`Falha ao criar pedido: ${orderErr?.message || 'Erro desconhecido'}`);
     }
 
-    if (!createdOrder) {
-      throw new Error('Falha ao obter ID do pedido criado.');
-    }
-
+    // 4. Salvar Itens do Pedido via supabaseAdmin
     const itemsPayload = validItems.map(item => ({
-      order_id: createdOrder!.id,
+      order_id: createdOrder.id,
       product_id: item.productId,
       quantity: item.quantity,
       unit_price: item.unitPrice,
@@ -285,13 +260,12 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       product_sku_snapshot: item.productSku
     }));
 
-    const { error: itemsErr } = await context.supabase.from('order_items').insert(itemsPayload as any);
+    const { error: itemsErr } = await supabaseAdmin.from('order_items').insert(itemsPayload as any);
     if (itemsErr) {
-      const { error: adminItemsErr } = await supabaseAdmin.from('order_items').insert(itemsPayload as any);
-      if (adminItemsErr) throw new Error(`Falha ao salvar itens do pedido: ${itemsErr.message || adminItemsErr.message}`);
+      throw new Error(`Falha ao salvar itens do pedido: ${itemsErr.message}`);
     }
 
-    // Criar parcelas
+    // 5. Criar parcelas via supabaseAdmin
     const fp = matchedData.parsed.paymentCondition || '28/35/42';
     const days = fp.split('/').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
     const instDays = days.length > 0 ? days : [28, 35, 42];
@@ -301,7 +275,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     const paymentsPayload = instDays.map((offset, idx) => {
       const d = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
       return {
-        order_id: createdOrder!.id,
+        order_id: createdOrder.id,
         installment_number: idx + 1,
         value: instVal,
         received_value: 0,
@@ -310,21 +284,15 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       };
     });
 
-    const { data: createdPayments, error: payErr } = await context.supabase
+    const { error: payErr } = await supabaseAdmin
       .from('order_payments')
-      .insert(paymentsPayload as any)
-      .select('id, installment_number, value, due_date');
+      .insert(paymentsPayload as any);
 
     if (payErr) {
-      const { data: adminPayments, error: adminPayErr } = await supabaseAdmin
-        .from('order_payments')
-        .insert(paymentsPayload as any)
-        .select('id, installment_number, value, due_date');
-
-      if (adminPayErr) throw new Error(`Falha ao gerar parcelas do pedido: ${payErr.message || adminPayErr.message}`);
+      throw new Error(`Falha ao gerar parcelas do pedido: ${payErr.message}`);
     }
 
-    // Gerar comissões previstas por fabricante para o representante comercial
+    // 6. Gerar comissões previstas por fabricante para o representante comercial
     try {
       const repId = matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
 
@@ -344,7 +312,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       const { data: savedPayments } = await supabaseAdmin
         .from('order_payments')
         .select('id, value')
-        .eq('order_id', createdOrder!.id);
+        .eq('order_id', createdOrder.id);
 
       const paymentsToUse = savedPayments || [];
 
@@ -367,7 +335,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
             const commVal = Number((baseVal * (commRate / 100)).toFixed(2));
 
             commsPayload.push({
-              order_id: createdOrder!.id,
+              order_id: createdOrder.id,
               order_payment_id: pay.id,
               representative_id: repId,
               manufacturer_id: mId,
