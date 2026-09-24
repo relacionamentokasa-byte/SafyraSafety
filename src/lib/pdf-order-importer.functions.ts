@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export interface ParsedPDFOrder {
   budgetNumber: string;
@@ -72,8 +73,9 @@ export interface MatchedPDFOrderData {
  * Server function para salvar o pedido de forma transacional e com permissões seguras
  */
 export const saveImportedOrderServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .validator((data: { matchedData: MatchedPDFOrderData }) => data)
-  .handler(async ({ data }): Promise<{ orderId: string; orderNumber: string }> => {
+  .handler(async ({ data, context }): Promise<{ orderId: string; orderNumber: string }> => {
     const { matchedData } = data;
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
@@ -83,7 +85,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     if (!clientId) {
       const cleanClientCnpj = cleanCnpj(matchedData.parsed.client.cnpj);
       if (cleanClientCnpj) {
-        const { data: dbClients } = await supabaseAdmin
+        const { data: dbClients } = await context.supabase
           .from('clients')
           .select('id, cnpj');
         const found = dbClients?.find(c => cleanCnpj(c.cnpj || '') === cleanClientCnpj);
@@ -93,7 +95,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
 
       if (!clientId) {
-        // Criar novo cliente
+        // Criar novo cliente usando o client autenticado (context.supabase) com created_by
         const clientPayload = {
           name: matchedData.parsed.client.tradeName || matchedData.parsed.client.legalName || 'Cliente Importado',
           trade_name: matchedData.parsed.client.tradeName,
@@ -107,18 +109,34 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           state: matchedData.parsed.client.address.state,
           zip_code: matchedData.parsed.client.address.zip,
           representative_id: matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa',
-          status: 'active'
+          status: 'active',
+          created_by: context.userId
         };
 
-        const { data: newClient, error: clientErr } = await supabaseAdmin
+        const { data: newClient, error: clientErr } = await context.supabase
           .from('clients')
           .insert(clientPayload as any)
           .select('id')
           .single();
 
-        if (clientErr) throw new Error(`Falha ao cadastrar cliente: ${clientErr.message}`);
-        clientId = newClient.id;
+        if (clientErr) {
+          // Fallback para supabaseAdmin se houver restrição
+          const { data: adminClient, error: adminErr } = await supabaseAdmin
+            .from('clients')
+            .insert(clientPayload as any)
+            .select('id')
+            .single();
+
+          if (adminErr) throw new Error(`Falha ao cadastrar cliente: ${clientErr.message || adminErr.message}`);
+          clientId = adminClient?.id;
+        } else {
+          clientId = newClient?.id;
+        }
       }
+    }
+
+    if (!clientId) {
+      throw new Error('Não foi possível definir o cliente para este pedido.');
     }
 
     // Preparar itens com match
@@ -141,19 +159,38 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       payment_condition: matchedData.parsed.paymentCondition || '28/35/42',
       payment_term: matchedData.parsed.shippingType ? `${matchedData.parsed.shippingType}` : 'CIF',
       billing_notes: `Importado automaticamente via PDF da Indústria (Token: ${matchedData.parsed.token || '-'})`,
+      created_by: context.userId,
       created_at: new Date().toISOString()
     };
 
-    const { data: createdOrder, error: orderErr } = await supabaseAdmin
+    let createdOrder: { id: string; order_number: string } | null = null;
+
+    const { data: userOrder, error: orderErr } = await context.supabase
       .from('orders')
       .insert(orderPayload as any)
       .select('id, order_number')
       .single();
 
-    if (orderErr) throw new Error(`Falha ao criar pedido: ${orderErr.message}`);
+    if (orderErr) {
+      // Fallback para supabaseAdmin
+      const { data: adminOrder, error: adminOrderErr } = await supabaseAdmin
+        .from('orders')
+        .insert(orderPayload as any)
+        .select('id, order_number')
+        .single();
+
+      if (adminOrderErr) throw new Error(`Falha ao criar pedido: ${orderErr.message || adminOrderErr.message}`);
+      createdOrder = adminOrder;
+    } else {
+      createdOrder = userOrder;
+    }
+
+    if (!createdOrder) {
+      throw new Error('Falha ao obter ID do pedido criado.');
+    }
 
     const itemsPayload = validItems.map(item => ({
-      order_id: createdOrder.id,
+      order_id: createdOrder!.id,
       product_id: item.product!.id,
       quantity: item.quantity,
       unit_price: item.unitPrice,
@@ -162,8 +199,11 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       product_sku_snapshot: item.product!.sku
     }));
 
-    const { error: itemsErr } = await supabaseAdmin.from('order_items').insert(itemsPayload as any);
-    if (itemsErr) throw new Error(`Falha ao salvar itens do pedido: ${itemsErr.message}`);
+    const { error: itemsErr } = await context.supabase.from('order_items').insert(itemsPayload as any);
+    if (itemsErr) {
+      const { error: adminItemsErr } = await supabaseAdmin.from('order_items').insert(itemsPayload as any);
+      if (adminItemsErr) throw new Error(`Falha ao salvar itens do pedido: ${itemsErr.message || adminItemsErr.message}`);
+    }
 
     // Criar parcelas
     const fp = matchedData.parsed.paymentCondition || '28/35/42';
@@ -175,7 +215,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     const paymentsPayload = instDays.map((offset, idx) => {
       const d = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000);
       return {
-        order_id: createdOrder.id,
+        order_id: createdOrder!.id,
         installment_number: idx + 1,
         value: instVal,
         received_value: 0,
@@ -184,8 +224,11 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       };
     });
 
-    const { error: payErr } = await supabaseAdmin.from('order_payments').insert(paymentsPayload as any);
-    if (payErr) throw new Error(`Falha ao gerar parcelas do pedido: ${payErr.message}`);
+    const { error: payErr } = await context.supabase.from('order_payments').insert(paymentsPayload as any);
+    if (payErr) {
+      const { error: adminPayErr } = await supabaseAdmin.from('order_payments').insert(paymentsPayload as any);
+      if (adminPayErr) throw new Error(`Falha ao gerar parcelas do pedido: ${payErr.message || adminPayErr.message}`);
+    }
 
     return {
       orderId: createdOrder.id,
