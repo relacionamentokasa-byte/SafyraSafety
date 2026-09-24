@@ -266,7 +266,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
     }
 
-    // Criar Pedido
+    // Criar ou Atualizar Pedido (Upsert seguro para evitar erro de duplicidade de order_number)
     const orderNumber = matchedData.parsed.budgetNumber || String(Math.floor(100000 + Math.random() * 900000));
     const totalAmount = matchedData.parsed.totals.totalAmount || validItems.reduce((s, i) => s + i.totalPrice, 0);
 
@@ -278,29 +278,69 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
 
     const finalRepId = userRepForOrder?.id || matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
 
-    const orderPayload = {
-      order_number: orderNumber,
-      client_id: clientId,
-      representative_id: finalRepId,
-      status: 'delivered',
-      subtotal_amount: totalAmount,
-      total_amount: totalAmount,
-      discount_amount: matchedData.parsed.totals.discount || 0,
-      payment_condition: matchedData.parsed.paymentCondition || '28/35/42',
-      payment_term: matchedData.parsed.shippingType ? `${matchedData.parsed.shippingType}` : 'CIF',
-      billing_notes: `Importado automaticamente via PDF da Indústria (Token: ${matchedData.parsed.token || '-'})`,
-      created_by: context.userId,
-      created_at: new Date().toISOString()
-    };
-
-    const { data: createdOrder, error: orderErr } = await supabaseAdmin
+    // Verificar se já existe pedido com este número de orçamento
+    const { data: existingOrder } = await supabaseAdmin
       .from('orders')
-      .insert(orderPayload as any)
       .select('id, order_number')
-      .single();
+      .eq('order_number', orderNumber)
+      .maybeSingle();
 
-    if (orderErr || !createdOrder) {
-      throw new Error(`Falha ao criar pedido: ${orderErr?.message || 'Erro desconhecido'}`);
+    let createdOrder: { id: string; order_number: string };
+
+    if (existingOrder) {
+      // Limpar itens, pagamentos e comissões anteriores antes de sobrescrever
+      await supabaseAdmin.from('order_items').delete().eq('order_id', existingOrder.id);
+      await supabaseAdmin.from('order_payments').delete().eq('order_id', existingOrder.id);
+      await supabaseAdmin.from('commissions').delete().eq('order_id', existingOrder.id);
+
+      const { data: updatedOrder, error: updateErr } = await supabaseAdmin
+        .from('orders')
+        .update({
+          client_id: clientId,
+          representative_id: finalRepId,
+          status: 'delivered',
+          subtotal_amount: totalAmount,
+          total_amount: totalAmount,
+          discount_amount: matchedData.parsed.totals.discount || 0,
+          payment_condition: matchedData.parsed.paymentCondition || '28/35/42',
+          payment_term: matchedData.parsed.shippingType ? `${matchedData.parsed.shippingType}` : 'CIF',
+          billing_notes: `Importado/Atualizado via PDF da Indústria (Token: ${matchedData.parsed.token || '-'})`,
+          updated_at: new Date().toISOString()
+        } as any)
+        .eq('id', existingOrder.id)
+        .select('id, order_number')
+        .single();
+
+      if (updateErr || !updatedOrder) {
+        throw new Error(`Falha ao atualizar pedido existente #${orderNumber}: ${updateErr?.message || 'Erro desconhecido'}`);
+      }
+      createdOrder = updatedOrder;
+    } else {
+      const orderPayload = {
+        order_number: orderNumber,
+        client_id: clientId,
+        representative_id: finalRepId,
+        status: 'delivered',
+        subtotal_amount: totalAmount,
+        total_amount: totalAmount,
+        discount_amount: matchedData.parsed.totals.discount || 0,
+        payment_condition: matchedData.parsed.paymentCondition || '28/35/42',
+        payment_term: matchedData.parsed.shippingType ? `${matchedData.parsed.shippingType}` : 'CIF',
+        billing_notes: `Importado automaticamente via PDF da Indústria (Token: ${matchedData.parsed.token || '-'})`,
+        created_by: context.userId,
+        created_at: new Date().toISOString()
+      };
+
+      const { data: newOrder, error: orderErr } = await supabaseAdmin
+        .from('orders')
+        .insert(orderPayload as any)
+        .select('id, order_number')
+        .single();
+
+      if (orderErr || !newOrder) {
+        throw new Error(`Falha ao criar pedido: ${orderErr?.message || 'Erro desconhecido'}`);
+      }
+      createdOrder = newOrder;
     }
 
     // Salvar Itens
