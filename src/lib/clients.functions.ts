@@ -51,14 +51,7 @@ const clientSchema = z.object({
 export const fetchClientsServer = createServerFn({ method: "GET" })
   .inputValidator((data: any) => data || {})
   .handler(async ({ data }) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: clients, error: errClients } = await supabaseAdmin
       .from('clients')

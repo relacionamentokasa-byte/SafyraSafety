@@ -89,14 +89,7 @@ export const createOpportunityServer = createServerFn({ method: "POST" })
     description?: string | null;
   }) => data)
   .handler(async ({ data }) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: inserted, error } = await supabaseAdmin
       .from('opportunities')
@@ -129,14 +122,7 @@ export const createOpportunityServer = createServerFn({ method: "POST" })
 export const updateOpportunityStageServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; stageId: string }) => data)
   .handler(async ({ data }) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { error } = await supabaseAdmin
       .from('opportunities')

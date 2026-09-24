@@ -16,14 +16,7 @@ export const fetchOrdersServer = createServerFn({ method: "POST" })
     manufacturerId?: string;
   } | undefined) => data || {})
   .handler(async ({ data }) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const {
       search = '',
@@ -198,14 +191,7 @@ export const fetchClientOrdersServer = createServerFn({ method: "POST" })
     const { clientId } = data;
     if (!clientId) return [];
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: orders, error } = await supabaseAdmin
       .from('orders')
@@ -233,14 +219,7 @@ export const fetchOrderDetailsServer = createServerFn({ method: "POST" })
     const { orderId } = data;
     if (!orderId) return null;
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: order, error } = await supabaseAdmin
       .from('orders')
@@ -279,14 +258,7 @@ export const fetchReportDataServer = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { startDate, endDate } = data || {};
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // 1. Pedidos
     let ordersQuery = supabaseAdmin
@@ -428,14 +400,7 @@ export const fetchCommissionsServer = createServerFn({ method: "POST" })
     manufacturerId?: string;
   } | undefined) => data || {})
   .handler(async ({ data }) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: commissions, error } = await supabaseAdmin
       .from('commissions')
@@ -475,14 +440,7 @@ export const fetchCommissionsServer = createServerFn({ method: "POST" })
  */
 export const fetchGoalsServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: goalsData, error: goalsError } = await supabaseAdmin
       .from('goals')
@@ -583,14 +541,7 @@ export const fetchGoalsServer = createServerFn({ method: "GET" })
  */
 export const fetchRepresentativesServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data, error } = await supabaseAdmin
       .from('representatives')
@@ -659,14 +610,7 @@ export const fetchRepresentativeDetailServer = createServerFn({ method: "POST" }
     const { representativeId } = data;
     if (!representativeId) return null;
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: rep, error: errRep } = await supabaseAdmin
       .from('representatives')
@@ -767,14 +711,7 @@ export const fetchRepresentativeDetailServer = createServerFn({ method: "POST" }
  */
 export const fetchRegionalAnalyticsServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // 1. Carregar todos os clientes
     const { data: clients, error: errClients } = await supabaseAdmin
@@ -818,14 +755,7 @@ export const fetchRegionalAnalyticsServer = createServerFn({ method: "GET" })
 
 export const fetchManufacturersServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data, error } = await supabaseAdmin
       .from('manufacturers')
@@ -858,14 +788,7 @@ export const deleteGoalServer = createServerFn({ method: "POST" })
     const { goalId } = data;
     if (!goalId) throw new Error("ID da meta é obrigatório.");
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { error } = await supabaseAdmin
       .from('goals')
@@ -894,14 +817,7 @@ export const saveGoalServer = createServerFn({ method: "POST" })
     if (!month || !year) throw new Error("Mês e ano são obrigatórios.");
     if (!targetValue || targetValue <= 0) throw new Error("Valor da meta deve ser maior que zero.");
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const payload: any = {
       representative_id: representativeId,
@@ -1007,14 +923,7 @@ export const toggleProductStatusServer = createServerFn({ method: "POST" })
     const { productId, status } = data;
     if (!productId) throw new Error("ID do produto é obrigatório.");
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { error } = await supabaseAdmin
       .from('products')
@@ -1038,14 +947,7 @@ export const duplicateProductServer = createServerFn({ method: "POST" })
     const { productId } = data;
     if (!productId) throw new Error("ID do produto é obrigatório.");
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     const { data: original, error: fetchErr } = await supabaseAdmin
       .from('products')
@@ -1092,14 +994,7 @@ export const deleteProductServer = createServerFn({ method: "POST" })
     const { productId } = data;
     if (!productId) throw new Error("ID do produto é obrigatório.");
 
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // Verificar se há itens de pedido associados
     const { count, error: countErr } = await supabaseAdmin
@@ -1136,14 +1031,7 @@ export const deleteProductServer = createServerFn({ method: "POST" })
  */
 export const fetchAllProductsServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     let allProducts: any[] = [];
     let page = 0;

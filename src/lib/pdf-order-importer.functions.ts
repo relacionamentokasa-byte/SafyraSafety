@@ -75,14 +75,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
   .validator((data: { matchedData: MatchedPDFOrderData }) => data)
   .handler(async ({ data }): Promise<{ orderId: string; orderNumber: string }> => {
     const { matchedData } = data;
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     let clientId = matchedData.matchedClient?.id;
 
@@ -387,14 +380,7 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
     const parsed = extractOrderFromText(extractedText);
 
     // Conectar ao Supabase para cruzar dados
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://hxogosqpcewvtwdyerru.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseKey,
-      { auth: { persistSession: false } }
-    );
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // 1. Cruzar Cliente por CNPJ
     let matchedClient: MatchedPDFOrderData['matchedClient'] = null;
