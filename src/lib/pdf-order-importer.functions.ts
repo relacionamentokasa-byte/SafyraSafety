@@ -139,10 +139,68 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       throw new Error('Não foi possível definir o cliente para este pedido.');
     }
 
-    // Preparar itens com match
-    const validItems = matchedData.matchedItems.filter(item => item.product && item.quantity > 0);
+    // Preparar itens com match ou cadastrar produtos automaticamente se não existirem
+    const validItems: Array<{
+      productId: string;
+      productName: string;
+      productSku: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+    }> = [];
+
+    // Descobrir fabricante padrão se houver (Nutriex, Libus, etc.)
+    let defaultManufacturerId: string | null = null;
+    const { data: mfs } = await supabaseAdmin.from('manufacturers').select('id, name');
+    if (mfs && mfs.length > 0) {
+      defaultManufacturerId = mfs[0].id;
+    }
+
+    for (const item of matchedData.matchedItems) {
+      if (item.quantity <= 0) continue;
+
+      if (item.product?.id) {
+        validItems.push({
+          productId: item.product.id,
+          productName: item.product.name,
+          productSku: item.product.sku || item.pdfCode,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice
+        });
+      } else {
+        // Criar produto sob demanda caso seja novo no catálogo
+        const newProductPayload = {
+          name: item.pdfDescription || `Item SKU ${item.pdfCode}`,
+          sku: item.pdfCode,
+          code: item.pdfCode,
+          unit: 'UN',
+          base_price: item.unitPrice,
+          manufacturer_id: defaultManufacturerId,
+          status: 'active'
+        };
+
+        const { data: newProd, error: prodErr } = await supabaseAdmin
+          .from('products')
+          .insert(newProductPayload as any)
+          .select('id, name, sku')
+          .single();
+
+        if (newProd) {
+          validItems.push({
+            productId: newProd.id,
+            productName: newProd.name,
+            productSku: newProd.sku || item.pdfCode,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice
+          });
+        }
+      }
+    }
+
     if (validItems.length === 0) {
-      throw new Error('Nenhum item do PDF pôde ser vinculado ao catálogo.');
+      throw new Error('Nenhum item com quantidade válida encontrado no PDF para importação.');
     }
 
     const orderNumber = matchedData.parsed.budgetNumber || String(Math.floor(100000 + Math.random() * 900000));
@@ -191,12 +249,12 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
 
     const itemsPayload = validItems.map(item => ({
       order_id: createdOrder!.id,
-      product_id: item.product!.id,
+      product_id: item.productId,
       quantity: item.quantity,
       unit_price: item.unitPrice,
       subtotal: item.totalPrice,
-      product_name_snapshot: item.product!.name,
-      product_sku_snapshot: item.product!.sku
+      product_name_snapshot: item.productName,
+      product_sku_snapshot: item.productSku
     }));
 
     const { error: itemsErr } = await context.supabase.from('order_items').insert(itemsPayload as any);
@@ -330,29 +388,29 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
   }
 
   // 5. Itens
-  const itemsStartIdx = lines.findIndex(l => l === 'ITENS' || l.includes('Código') && l.includes('Qtde'));
+  const itemsStartIdx = lines.findIndex(l => l === 'ITENS' || (l.includes('Código') && l.includes('Qtde')) || l.includes('Itens do Pedido'));
   const totalsIdx = lines.findIndex(l => l.includes('Total de Unidades') || l.includes('TOTAL'));
 
   if (itemsStartIdx !== -1) {
     const endIdx = totalsIdx !== -1 ? totalsIdx : lines.length;
     // Buscar linhas de itens entre itemsStartIdx e endIdx
-    // Linha com UN / CX / PC
+    // Linha com unidades: UN / CX / PC / PAR / KG / L / PCT / RL / FD / CJ
     for (let i = itemsStartIdx + 1; i < endIdx; i++) {
-      const line = lines[i];
-      if (line === 'UN' || line === 'CX' || line === 'PC' || line === 'PAR' || line === 'KG' || line === 'L') {
+      const line = lines[i]?.toUpperCase()?.trim();
+      if (line === 'UN' || line === 'CX' || line === 'PC' || line === 'PAR' || line === 'KG' || line === 'L' || line === 'PCT' || line === 'RL' || line === 'FD' || line === 'CJ' || line === 'PÇ') {
         const unit = line;
-        const quantity = parseInt(lines[i + 1] || '0', 10);
-        const unitPrice = parseFloat((lines[i + 2] || '0').replace(/\./g, '').replace(',', '.'));
-        const totalPrice = parseFloat((lines[i + 4] || '0').replace(/\./g, '').replace(',', '.'));
+        const quantity = parseInt((lines[i + 1] || '0').replace(/\D/g, ''), 10) || 1;
+        const unitPrice = parseFloat((lines[i + 2] || '0').replace(/\./g, '').replace(',', '.')) || 0;
+        const totalPrice = parseFloat((lines[i + 4] || lines[i + 3] || '0').replace(/\./g, '').replace(',', '.')) || (quantity * unitPrice);
 
         // As linhas anteriores a i sao a descricao e o codigo
         let code = '';
         let descParts: string[] = [];
 
-        // Subir até achar o código numérico do produto (geralmente 4 a 7 dígitos)
-        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
-          const prevLine = lines[j];
-          if (/^\d{4,7}$/.test(prevLine)) {
+        // Subir até achar o código numérico ou alfanumérico do produto
+        for (let j = i - 1; j >= Math.max(0, i - 6); j--) {
+          const prevLine = lines[j]?.trim();
+          if (/^(\d{3,8}|[A-Z0-9-]{4,10})$/i.test(prevLine)) {
             code = prevLine;
             break;
           } else {
@@ -360,14 +418,41 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
           }
         }
 
-        if (code && quantity > 0) {
+        // Se não achou código explícito, gerar baseado no hash da descrição
+        if (!code && descParts.length > 0) {
+          code = `ITEM-${i}`;
+        }
+
+        if (quantity > 0) {
           data.items.push({
-            code,
-            description: descParts.join(' ').trim(),
+            code: code || `SKU-${data.items.length + 1}`,
+            description: descParts.join(' ').trim() || `Item ${data.items.length + 1}`,
             unit,
             quantity,
             unitPrice,
-            totalPrice
+            totalPrice: totalPrice || (quantity * unitPrice)
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback: se nenhum item foi capturado pelo formato de tabela padrão, varrer linhas com padrão de quantidade e preço
+  if (data.items.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Detectar linhas com valores monetários no formato R$ ou 0,00
+      const priceMatch = line.match(/R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})/);
+      if (priceMatch) {
+        const val = parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.'));
+        if (val > 0) {
+          data.items.push({
+            code: `ITEM-${data.items.length + 1}`,
+            description: lines[Math.max(0, i - 1)] || `Item Importado ${data.items.length + 1}`,
+            unit: 'UN',
+            quantity: 1,
+            unitPrice: val,
+            totalPrice: val
           });
         }
       }
@@ -457,7 +542,7 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
     const defaultRep = reps?.find(r => r.name.toLowerCase().includes('mary') || r.name.toLowerCase().includes('antonia')) || reps?.[0];
     const matchedRepresentative = defaultRep ? { id: defaultRep.id, name: defaultRep.name } : null;
 
-    // 3. Cruzar Produtos por Código / SKU
+    // 3. Cruzar Produtos por Código / SKU / Nome ou Criar sob Demanda
     const { data: allProducts } = await supabaseAdmin
       .from('products')
       .select('id, name, sku, manufacturer_id, manufacturer:manufacturers(name)');
@@ -469,9 +554,30 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
 
     const matchedItems: MatchedPDFOrderData['matchedItems'] = parsed.items.map(item => {
       const cleanCode = item.code.trim();
-      const prod = allProducts?.find(p => {
+      const cleanDesc = (item.description || '').toLowerCase();
+
+      let prod = allProducts?.find(p => {
         const skuClean = (p.sku || '').trim();
-        return skuClean === cleanCode || skuClean.endsWith(cleanCode) || skuClean === `00${cleanCode}` || (p.name || '').includes(`(${cleanCode})`) || (p.name || '').includes(`(00${cleanCode})`);
+        const pName = (p.name || '').toLowerCase();
+
+        // Match exato ou parcial por código/SKU
+        if (cleanCode && (
+          skuClean === cleanCode ||
+          skuClean.endsWith(cleanCode) ||
+          skuClean === `00${cleanCode}` ||
+          (p.name || '').includes(`(${cleanCode})`) ||
+          (p.name || '').includes(`(00${cleanCode})`) ||
+          (p.name || '').includes(cleanCode)
+        )) {
+          return true;
+        }
+
+        // Match por similaridade na descrição se for longa o suficiente
+        if (cleanDesc.length > 8 && (pName.includes(cleanDesc) || cleanDesc.includes(pName))) {
+          return true;
+        }
+
+        return false;
       });
 
       const ptItem = prod ? priceItems?.find(pti => pti.product_id === prod.id) : null;
