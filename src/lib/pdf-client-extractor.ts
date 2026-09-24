@@ -1,49 +1,68 @@
 /**
  * Extrai todo o conteúdo de texto de um arquivo PDF diretamente no navegador.
- * Usa import dinâmico com fallback nativo, sem falhar por bloqueio de Worker ou CDN.
+ * Carrega a biblioteca oficial PDF.js via CDN de forma síncrona e confiável sem travar workers.
  */
 export async function extractTextFromPDFFile(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const uint8 = new Uint8Array(arrayBuffer);
 
   try {
-    const pdfjsLib = await import('pdfjs-dist');
+    // Carregar pdfjs dinamicamente ou do window
+    let pdfjs = (window as any).pdfjsLib;
 
-    // Tentar configurar worker local/CDN se disponível
-    if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+    if (!pdfjs) {
+      await loadPdfJsScript();
+      pdfjs = (window as any).pdfjsLib;
     }
 
-    const loadingTask = pdfjsLib.getDocument({
-      data: uint8,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-      verbosity: 0
-    });
+    if (pdfjs) {
+      pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const loadingTask = pdfjs.getDocument({ data: uint8 });
+      const pdfDoc = await loadingTask.promise;
 
-    const pdfDoc = await loadingTask.promise;
-    let fullText = '';
+      let fullText = '';
+      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+        const page = await pdfDoc.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => ('str' in item ? item.str : ''))
+          .join('\n');
+        fullText += pageText + '\n';
+      }
 
-    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-      const page = await pdfDoc.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => ('str' in item ? item.str : ''))
-        .filter(Boolean)
-        .join('\n');
-      fullText += pageText + '\n';
-    }
-
-    if (fullText.trim().length > 0) {
-      return fullText;
+      if (fullText.trim().length > 0) {
+        return fullText;
+      }
     }
   } catch (err) {
-    console.warn('Tentativa com pdfjs-dist falhou, aplicando extrator binário nativo:', err);
+    console.warn('Falha no leitor primário PDF.js, tentando fallback nativo:', err);
   }
 
-  // FALLBACK ULTRA CONFIÁVEL: Extração binária nativa de streams de texto PDF
-  return extractTextFromPdfBinary(uint8);
+  // Fallback nativo
+  const fallback = extractTextFromPdfBinary(uint8);
+  if (fallback.trim().length > 0) {
+    return fallback;
+  }
+
+  throw new Error('Não foi possível ler as páginas do arquivo PDF. Verifique se o arquivo não está corrompido ou protegido por senha.');
+}
+
+/**
+ * Injeta o script do PDF.js de versão estável compatível com todos os browsers modernos
+ */
+function loadPdfJsScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).pdfjsLib) {
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Não foi possível carregar a biblioteca de leitura de PDF.'));
+    document.head.appendChild(script);
+  });
 }
 
 /**
