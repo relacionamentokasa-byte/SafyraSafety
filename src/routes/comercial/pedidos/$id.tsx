@@ -649,35 +649,55 @@ function OrderDetailsPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y">
-                          {order.items?.map((item: any) => (
-                            <tr key={item.id} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground font-semibold">{item.product?.code || item.product?.sku}</td>
-                              <td className="px-4 py-3">
-                                <p className="font-semibold text-foreground">{formatDisplayName(item.product?.name)}</p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] text-muted-foreground uppercase font-bold bg-muted px-1.5 py-0.5 rounded">{item.product?.unit}</span>
-                                  {(() => {
-                                    const pricingSnapshot = item.pricing_snapshot as {
-                                      price_table_name?: string;
-                                      price_table_code?: string | null;
-                                      price_table_item_id?: string | null;
-                                    } | null;
-                                    const tableName = pricingSnapshot?.price_table_name;
-                                    const tableCode = pricingSnapshot?.price_table_code;
-                                    return tableName ? (
-                                      <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
-                                        • Tabela: {tableName}{tableCode ? ` (${tableCode})` : ""}
-                                      </span>
-                                    ) : null;
-                                  })()}
-                                </div>
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map((item: any) => (
+                              <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="px-4 py-3 font-mono text-xs text-muted-foreground font-semibold">
+                                  {item.product?.code || item.product?.sku || item.product_sku_snapshot || 'ITEM'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <p className="font-semibold text-foreground">
+                                    {formatDisplayName(item.product?.name || item.product_name_snapshot || 'Produto do Pedido')}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold bg-muted px-1.5 py-0.5 rounded">
+                                      {item.product?.unit || 'UN'}
+                                    </span>
+                                    {(() => {
+                                      const pricingSnapshot = item.pricing_snapshot as {
+                                        price_table_name?: string;
+                                        price_table_code?: string | null;
+                                        price_table_item_id?: string | null;
+                                      } | null;
+                                      const tableName = pricingSnapshot?.price_table_name;
+                                      const tableCode = pricingSnapshot?.price_table_code;
+                                      return tableName ? (
+                                        <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-1">
+                                          • Tabela: {tableName}{tableCode ? ` (${tableCode})` : ""}
+                                        </span>
+                                      ) : null;
+                                    })()}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center font-bold text-foreground">{Number(item.quantity || 1)}</td>
+                                <td className="px-4 py-3 text-right font-medium text-foreground">
+                                  R$ {Number(item.unit_price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-3 text-right text-destructive font-medium">
+                                  - R$ {Number(item.discount_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-3 text-right font-extrabold text-foreground">
+                                  R$ {Number(item.subtotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground italic">
+                                Nenhum item detalhado encontrado para este pedido.
                               </td>
-                              <td className="px-4 py-3 text-center font-bold text-foreground">{Number(item.quantity)}</td>
-                              <td className="px-4 py-3 text-right font-medium text-foreground">R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-4 py-3 text-right text-destructive font-medium">- R$ {Number(item.discount_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-4 py-3 text-right font-extrabold text-foreground">R$ {Number(item.subtotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                         <tfoot className="bg-muted/30 border-t">
                           <tr>

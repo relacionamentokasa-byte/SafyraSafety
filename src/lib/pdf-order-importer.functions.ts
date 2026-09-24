@@ -551,12 +551,23 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     else data.shippingType = 'CIF';
   }
 
-  // 5. Extração de Itens (Multi-Estratégia)
-  const unitsRegex = /^(UN|CX|PC|PAR|KG|L|PCT|RL|FD|CJ|PÇ|PR|PCE|PA)$/i;
+  // 5. Extração de Itens (Multi-Estratégia Resiliente)
+  const unitsRegex = /^(UN|CX|PC|PAR|KG|L|PCT|RL|FD|CJ|PÇ|PR|PCE|PA|M|ROLO|FARDO|LATA|GAL|KIT)$/i;
 
-  // ESTRATÉGIA A: Formato de Colunas / Tabela Nutriex e Libus (Unidade na linha)
-  const itemsStartIdx = lines.findIndex(l => l === 'ITENS' || (l.includes('Código') && l.includes('Qtde')) || l.includes('Itens do Pedido'));
-  const totalsIdx = lines.findIndex(l => l.includes('Total de Unidades') || l.includes('TOTAL'));
+  // ESTRATÉGIA A: Formato de Colunas / Tabela Nutriex e Libus (Unidade na linha ou próxima)
+  const itemsStartIdx = lines.findIndex(l =>
+    l === 'ITENS' ||
+    l === 'PRODUTOS' ||
+    (l.includes('Código') && l.includes('Qtde')) ||
+    (l.includes('Item') && l.includes('Descrição')) ||
+    l.includes('Itens do Pedido')
+  );
+  const totalsIdx = lines.findIndex(l =>
+    l.includes('Total de Unidades') ||
+    l.includes('TOTAL GERAL') ||
+    l.includes('TOTAL DO PEDIDO') ||
+    l.startsWith('TOTAL')
+  );
 
   if (itemsStartIdx !== -1) {
     const endIdx = totalsIdx !== -1 ? totalsIdx : lines.length;
@@ -600,11 +611,11 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   }
 
-  // ESTRATÉGIA B: Linha única contendo código, descrição, quantidade e valores (Ex: "10010045 LUVA NITRILICA 100 UN 15,50 1550,00")
+  // ESTRATÉGIA B: Linha única ou semi-estruturada contendo SKU, descrição, quantidade e preços
   if (data.items.length === 0) {
     for (const line of lines) {
-      // Regex para capturar linhas completas de pedido com valores
-      const rowMatch = line.match(/^([A-Z0-9.\-_]{3,15})\s+(.+?)\s+(\d+(?:[.,]\d+)?)\s*(UN|CX|PC|PAR|KG|PCT|RL|FD|CJ|PÇ)?\s*(?:R?\$?\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:R?\$?\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})?$/i);
+      // Regex para capturar linhas completas com código inicial ou intermediário
+      const rowMatch = line.match(/^([A-Z0-9.\-_]{3,15})\s+(.+?)\s+(\d+(?:[.,]\d+)?)\s*(UN|CX|PC|PAR|KG|PCT|RL|FD|CJ|PÇ|PR|PCE|PA|M)?\s*(?:R?\$?\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})\s*(?:R?\$?\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})?$/i);
       if (rowMatch) {
         const code = rowMatch[1];
         const desc = rowMatch[2];
@@ -628,18 +639,51 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   }
 
-  // ESTRATÉGIA C: Varredura de linhas com valores monetários e identificação de produtos próximos
+  // ESTRATÉGIA C: Padrão Nutriex/Libus tabular compacto (Código isolado seguido de descrição e colunas numéricas)
+  if (data.items.length === 0) {
+    for (let i = 0; i < lines.length - 2; i++) {
+      const line = lines[i];
+      // Código de 4 a 10 dígitos ou alfanumérico comum em indústrias de EPI
+      if (/^\d{4,9}$/.test(line) || /^[A-Z]{2,4}\d{3,6}$/.test(line)) {
+        const desc = lines[i + 1] || '';
+        const numLine = lines[i + 2] || '';
+
+        // Verifica se a linha seguinte contém valores em R$ ou padrão de quantidade
+        const currencyMatches = (numLine + ' ' + (lines[i + 3] || '')).match(/\d{1,3}(?:\.\d{3})*,\d{2}/g);
+        if (currencyMatches && currencyMatches.length >= 1) {
+          const uPrice = parseFloat(currencyMatches[0].replace(/\./g, '').replace(',', '.')) || 0;
+          const tPrice = currencyMatches[1] ? parseFloat(currencyMatches[1].replace(/\./g, '').replace(',', '.')) : uPrice;
+
+          let qty = 1;
+          const qMatch = numLine.match(/\b(\d{1,4})\b/);
+          if (qMatch) {
+            qty = parseInt(qMatch[1], 10) || 1;
+          }
+
+          data.items.push({
+            code: line,
+            description: desc || `Item ${line}`,
+            unit: 'UN',
+            quantity: qty,
+            unitPrice: uPrice,
+            totalPrice: tPrice || (qty * uPrice)
+          });
+        }
+      }
+    }
+  }
+
+  // ESTRATÉGIA D: Varredura de linhas com valores monetários e identificação de produtos próximos
   if (data.items.length === 0) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       // Ignorar linhas de cabeçalho e totais
-      if (/total|subtotal|desconto|imposto|cnpj|telefone|cep/i.test(line)) continue;
+      if (/total|subtotal|desconto|imposto|cnpj|telefone|cep|inscrição|emissão|vendedor/i.test(line)) continue;
 
       const priceMatch = line.match(/R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2})/);
       if (priceMatch) {
         const val = parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.'));
         if (val > 0) {
-          // Tentar achar quantidade na linha anterior ou posterior
           let qty = 1;
           const prevLine = lines[i - 1] || '';
           const nextLine = lines[i + 1] || '';
