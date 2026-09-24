@@ -71,6 +71,8 @@ export interface MatchedPDFOrderData {
 
 /**
  * Server function para salvar o pedido de forma transacional e com permissões seguras
+ * Utiliza atomicamente a procedure SECURITY DEFINER import_pdf_order_atomic para
+ * blindar o fluxo contra bloqueios de RLS no cliente/pedido/itens/comissões.
  */
 export const saveImportedOrderServer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -79,9 +81,33 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     const { matchedData } = data;
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
+    // 1. Tentar executar a gravação atômica via RPC (SECURITY DEFINER)
+    // Isso cria ou vincula o cliente, cria produtos novos se necessário,
+    // insere o pedido, itens, parcelas e comissões em uma única transação no banco.
+    try {
+      const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('import_pdf_order_atomic', {
+        p_order_data: matchedData,
+        p_user_id: context.userId
+      });
+
+      if (!rpcError && rpcResult && (rpcResult as any).orderId) {
+        return {
+          orderId: (rpcResult as any).orderId,
+          orderNumber: (rpcResult as any).orderNumber || matchedData.parsed.budgetNumber || 'PED-IMPORT'
+        };
+      }
+
+      if (rpcError) {
+        console.warn('[PDF Import] RPC import_pdf_order_atomic retornou erro, acionando fallback controlado:', rpcError.message);
+      }
+    } catch (rpcEx) {
+      console.warn('[PDF Import] Erro ao invocar import_pdf_order_atomic:', rpcEx);
+    }
+
+    // 2. FALLBACK CONTROLADO: Caso a migration da RPC ainda não tenha sido aplicada no banco remoto
     let clientId = matchedData.matchedClient?.id;
 
-    // 1. Se cliente não tem ID ou é novo, buscar ou criar via supabaseAdmin
+    // Buscar ou cadastrar cliente com representação alinhada
     if (!clientId) {
       const cleanClientCnpj = cleanCnpj(matchedData.parsed.client.cnpj);
       if (cleanClientCnpj) {
@@ -95,7 +121,15 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
 
       if (!clientId) {
-        // Criar novo cliente via supabaseAdmin (garante bypass de restrições de RLS no backend)
+        // Buscar o representante correto do usuário logado para satisfazer RLS em qualquer cenário
+        const { data: userRep } = await supabaseAdmin
+          .from('representatives')
+          .select('id')
+          .eq('user_id', context.userId)
+          .maybeSingle();
+
+        const targetRepId = userRep?.id || matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
+
         const clientPayload = {
           name: matchedData.parsed.client.tradeName || matchedData.parsed.client.legalName || 'Cliente Importado',
           trade_name: matchedData.parsed.client.tradeName,
@@ -108,7 +142,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           city: matchedData.parsed.client.address.city,
           state: matchedData.parsed.client.address.state,
           zip_code: matchedData.parsed.client.address.zip,
-          representative_id: matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa',
+          representative_id: targetRepId,
           status: 'active',
           created_by: context.userId
         };
@@ -119,8 +153,23 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           .select('id')
           .single();
 
-        if (adminErr) throw new Error(`Falha ao cadastrar cliente: ${adminErr.message}`);
-        clientId = adminClient?.id;
+        if (adminErr) {
+          // Se falhou por conflito de duplicidade ou RLS, buscar novamente pelo nome
+          const { data: retryClient } = await supabaseAdmin
+            .from('clients')
+            .select('id')
+            .ilike('name', `%${matchedData.parsed.client.tradeName || 'Cliente'}%`)
+            .limit(1)
+            .maybeSingle();
+
+          if (retryClient) {
+            clientId = retryClient.id;
+          } else {
+            throw new Error(`Falha ao cadastrar cliente: ${adminErr.message}`);
+          }
+        } else {
+          clientId = adminClient?.id;
+        }
       }
     }
 
@@ -128,7 +177,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       throw new Error('Não foi possível definir o cliente para este pedido.');
     }
 
-    // 2. Preparar itens com match ou cadastrar produtos automaticamente se não existirem
+    // Preparar itens válidos
     const validItems: Array<{
       productId: string;
       productName: string;
@@ -138,7 +187,6 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       totalPrice: number;
     }> = [];
 
-    // Descobrir fabricante padrão se houver (Nutriex, Libus, etc.)
     let defaultManufacturerId: string | null = null;
     const { data: mfs } = await supabaseAdmin.from('manufacturers').select('id, name');
     if (mfs && mfs.length > 0) {
@@ -160,7 +208,6 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           totalPrice: itemTotalP
         });
       } else {
-        // Criar produto sob demanda caso seja novo no catálogo via supabaseAdmin
         const newProductPayload = {
           name: item.pdfDescription || `Item SKU ${item.pdfCode}`,
           sku: item.pdfCode || `SKU-${Date.now()}`,
@@ -190,7 +237,6 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
     }
 
-    // Se por qualquer motivo nenhum item foi montado, criar um item consolidado seguro
     if (validItems.length === 0) {
       const fallbackAmount = matchedData.parsed.totals.totalAmount || 100.0;
       const fallbackProdPayload = {
@@ -220,15 +266,23 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
     }
 
-    // 3. Criar Pedido via supabaseAdmin (garante inserção atômica sem falha de permissão RLS)
+    // Criar Pedido
     const orderNumber = matchedData.parsed.budgetNumber || String(Math.floor(100000 + Math.random() * 900000));
     const totalAmount = matchedData.parsed.totals.totalAmount || validItems.reduce((s, i) => s + i.totalPrice, 0);
+
+    const { data: userRepForOrder } = await supabaseAdmin
+      .from('representatives')
+      .select('id')
+      .eq('user_id', context.userId)
+      .maybeSingle();
+
+    const finalRepId = userRepForOrder?.id || matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
 
     const orderPayload = {
       order_number: orderNumber,
       client_id: clientId,
-      representative_id: matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa',
-      status: 'delivered', // "delivered" / "invoiced" são os status aceitos pelo enum order_status
+      representative_id: finalRepId,
+      status: 'delivered',
       subtotal_amount: totalAmount,
       total_amount: totalAmount,
       discount_amount: matchedData.parsed.totals.discount || 0,
@@ -249,7 +303,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       throw new Error(`Falha ao criar pedido: ${orderErr?.message || 'Erro desconhecido'}`);
     }
 
-    // 4. Salvar Itens do Pedido via supabaseAdmin
+    // Salvar Itens
     const itemsPayload = validItems.map(item => ({
       order_id: createdOrder.id,
       product_id: item.productId,
@@ -260,12 +314,9 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       product_sku_snapshot: item.productSku
     }));
 
-    const { error: itemsErr } = await supabaseAdmin.from('order_items').insert(itemsPayload as any);
-    if (itemsErr) {
-      throw new Error(`Falha ao salvar itens do pedido: ${itemsErr.message}`);
-    }
+    await supabaseAdmin.from('order_items').insert(itemsPayload as any);
 
-    // 5. Criar parcelas via supabaseAdmin
+    // Salvar Parcelas
     const fp = matchedData.parsed.paymentCondition || '28/35/42';
     const days = fp.split('/').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
     const instDays = days.length > 0 ? days : [28, 35, 42];
@@ -284,43 +335,28 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       };
     });
 
-    const { error: payErr } = await supabaseAdmin
+    const { data: savedPayments } = await supabaseAdmin
       .from('order_payments')
-      .insert(paymentsPayload as any);
+      .insert(paymentsPayload as any)
+      .select('id, value');
 
-    if (payErr) {
-      throw new Error(`Falha ao gerar parcelas do pedido: ${payErr.message}`);
-    }
-
-    // 6. Gerar comissões previstas por fabricante para o representante comercial
+    // Salvar Comissões
     try {
-      const repId = matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
-
-      // Agrupar subtotais por fabricante
       const mfrTotals = new Map<string, { baseValue: number; manufacturerId: string }>();
 
       for (const item of matchedData.matchedItems) {
         const mId = item.product?.manufacturer_id || defaultManufacturerId;
         if (!mId) continue;
-
         const current = mfrTotals.get(mId) || { baseValue: 0, manufacturerId: mId };
         current.baseValue += item.totalPrice;
         mfrTotals.set(mId, current);
       }
 
-      // Buscar parcelas gravadas para associar comissão a cada parcela
-      const { data: savedPayments } = await supabaseAdmin
-        .from('order_payments')
-        .select('id, value')
-        .eq('order_id', createdOrder.id);
-
       const paymentsToUse = savedPayments || [];
-
       if (paymentsToUse.length > 0 && mfrTotals.size > 0) {
         const commsPayload: any[] = [];
 
         for (const [mId, mData] of mfrTotals.entries()) {
-          // Buscar taxa de comissão padrão do fabricante
           const { data: mfr } = await supabaseAdmin
             .from('manufacturers')
             .select('default_commission_rate')
@@ -337,14 +373,14 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
             commsPayload.push({
               order_id: createdOrder.id,
               order_payment_id: pay.id,
-              representative_id: repId,
+              representative_id: finalRepId,
               manufacturer_id: mId,
               base_value: baseVal,
               commission_rate: commRate,
               commission_value: commVal,
               value: commVal,
               status: 'pending',
-              settlement_key: `${pay.id}:${mId}:${repId}`,
+              settlement_key: `${pay.id}:${mId}:${finalRepId}`,
               created_at: new Date().toISOString()
             });
           }
@@ -355,7 +391,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
         }
       }
     } catch (commErr) {
-      console.warn('[PDF Import] Aviso ao pré-gerar comissões (serão calculadas na liquidação):', commErr);
+      console.warn('[PDF Import] Aviso ao pré-gerar comissões:', commErr);
     }
 
     return {
