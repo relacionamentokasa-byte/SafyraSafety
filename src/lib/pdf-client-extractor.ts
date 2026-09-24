@@ -1,115 +1,75 @@
+import * as pdfjsLib from 'pdfjs-dist';
+// Vite resolve o asset do worker localmente no bundle de produção sem depender de CDN externa
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+}
+
 /**
- * Extrai todo o conteúdo de texto de um arquivo PDF diretamente no navegador.
- * Carrega a biblioteca oficial PDF.js via CDN de forma síncrona e confiável sem travar workers.
+ * Extrai todo o conteúdo de texto de um arquivo PDF no navegador.
+ * 1. Usa o worker local empacotado pelo Vite (pdfjs-dist).
+ * 2. Se falhar, usa fake-worker interno do PDF.js (sem worker thread).
+ * 3. Se falhar, tenta via CDN.
  */
 export async function extractTextFromPDFFile(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const uint8 = new Uint8Array(arrayBuffer);
 
+  // Tentativa 1: pdfjs-dist empacotado com worker local do Vite
   try {
-    // Carregar pdfjs dinamicamente ou do window
-    let pdfjs = (window as any).pdfjsLib;
-
-    if (!pdfjs) {
-      await loadPdfJsScript();
-      pdfjs = (window as any).pdfjsLib;
-    }
-
-    if (pdfjs) {
-      pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const loadingTask = pdfjs.getDocument({ data: uint8 });
-      const pdfDoc = await loadingTask.promise;
-
-      let fullText = '';
-      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        const page = await pdfDoc.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => ('str' in item ? item.str : ''))
-          .join('\n');
-        fullText += pageText + '\n';
-      }
-
-      if (fullText.trim().length > 0) {
-        return fullText;
-      }
-    }
-  } catch (err) {
-    console.warn('Falha no leitor primário PDF.js, tentando fallback nativo:', err);
+    const text = await parseWithPdfJs(uint8, pdfWorkerUrl);
+    if (text && text.trim().length > 0) return text;
+  } catch (err1) {
+    console.warn('[PDF Extractor] Tentativa 1 (Worker Vite) falhou:', err1);
   }
 
-  // Fallback nativo
-  const fallback = extractTextFromPdfBinary(uint8);
-  if (fallback.trim().length > 0) {
-    return fallback;
+  // Tentativa 2: pdfjs-dist desativando o worker (execução síncrona na thread principal)
+  try {
+    const text = await parseWithPdfJs(uint8, false);
+    if (text && text.trim().length > 0) return text;
+  } catch (err2) {
+    console.warn('[PDF Extractor] Tentativa 2 (Sem Worker) falhou:', err2);
   }
 
-  throw new Error('Não foi possível ler as páginas do arquivo PDF. Verifique se o arquivo não está corrompido ou protegido por senha.');
+  // Tentativa 3: CDN unpkg como fallback
+  try {
+    const cdnWorker = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    const text = await parseWithPdfJs(uint8, cdnWorker);
+    if (text && text.trim().length > 0) return text;
+  } catch (err3) {
+    console.warn('[PDF Extractor] Tentativa 3 (CDN Worker) falhou:', err3);
+  }
+
+  throw new Error('Não foi possível ler as páginas do arquivo PDF no navegador.');
 }
 
-/**
- * Injeta o script do PDF.js de versão estável compatível com todos os browsers modernos
- */
-function loadPdfJsScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).pdfjsLib) {
-      resolve();
-      return;
+async function parseWithPdfJs(uint8: Uint8Array, workerSrc: string | false): Promise<string> {
+  if (typeof window !== 'undefined') {
+    if (workerSrc === false) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    } else if (workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
     }
+  }
 
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Não foi possível carregar a biblioteca de leitura de PDF.'));
-    document.head.appendChild(script);
+  const loadingTask = pdfjsLib.getDocument({
+    data: uint8,
+    isEvalSupported: false,
+    useSystemFonts: true,
   });
-}
 
-/**
- * Parser nativo de streams de texto PDF (BT...ET e blocos Tj/TJ/Text).
- * Funciona em 100% dos navegadores sem depender de Workers ou scripts externos.
- */
-function extractTextFromPdfBinary(uint8Array: Uint8Array): string {
-  const textDecoder = new TextDecoder('latin1');
-  const rawContent = textDecoder.decode(uint8Array);
+  const pdfDoc = await loadingTask.promise;
+  let fullText = '';
 
-  const extractedLines: string[] = [];
-
-  // 1. Procurar blocos de texto entre parênteses em streams: (Texto) Tj ou [(T)(e)(x)(t)(o)] TJ
-  const tjRegex = /\(([^)]+)\)\s*(?:Tj|'|")/g;
-  let match;
-  while ((match = tjRegex.exec(rawContent)) !== null) {
-    const clean = decodePdfString(match[1]);
-    if (clean && clean.trim().length > 0) {
-      extractedLines.push(clean.trim());
-    }
+  for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+    const page = await pdfDoc.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => ('str' in item ? item.str : ''))
+      .join('\n');
+    fullText += pageText + '\n';
   }
 
-  // 2. Procurar blocos de array: [(Item 1) 20 (Item 2)] TJ
-  const arrayTjRegex = /\[(.*?)\]\s*TJ/g;
-  while ((match = arrayTjRegex.exec(rawContent)) !== null) {
-    const arrayContent = match[1];
-    const innerMatches = arrayContent.match(/\(([^)]+)\)/g);
-    if (innerMatches) {
-      const line = innerMatches.map(m => decodePdfString(m.slice(1, -1))).join('').trim();
-      if (line.length > 0) {
-        extractedLines.push(line);
-      }
-    }
-  }
-
-  return extractedLines.join('\n');
-}
-
-function decodePdfString(str: string): string {
-  return str
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\b/g, '\b')
-    .replace(/\\f/g, '\f')
-    .replace(/\\\(/g, '(')
-    .replace(/\\\)/g, ')')
-    .replace(/\\\\/g, '\\')
-    .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+  return fullText;
 }

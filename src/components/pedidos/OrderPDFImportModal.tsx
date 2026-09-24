@@ -56,21 +56,43 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
     setIsProcessing(true);
     setMatchedData(null);
 
-    try {
-      // 1. Extrair o texto do PDF diretamente no navegador (rápido e 100% compatível com Serverless na Vercel)
-      const extractedText = await extractTextFromPDFFile(file);
+    // Limpar o valor do input imediatamente para permitir selecionar o mesmo arquivo novamente caso haja ajuste
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
 
-      if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error('Não foi possível ler o texto do arquivo PDF selecionado.');
+    try {
+      let extractedText = '';
+
+      // 1. Tentar extrair o texto diretamente no navegador via PDF.js empacotado
+      try {
+        extractedText = await extractTextFromPDFFile(file);
+      } catch (clientErr) {
+        console.warn('Extração client-side falhou, acionando fallback de leitura do arquivo:', clientErr);
       }
 
-      // 2. Enviar o texto extraído para a Server Function cruzar os dados no banco
-      const result = await processOrderPDFServer({ data: { rawText: extractedText } });
+      let result: MatchedPDFOrderData;
+
+      if (extractedText && extractedText.trim().length > 0) {
+        // Enviar o texto extraído diretamente
+        result = await processOrderPDFServer({ data: { rawText: extractedText } });
+      } else {
+        // Fallback: converter arquivo para Base64 e enviar para o backend
+        const arrayBuffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        result = await processOrderPDFServer({ data: { base64Pdf: base64 } });
+      }
+
       setMatchedData(result);
       toast.success(`PDF "${file.name}" processado com sucesso!`);
     } catch (err: any) {
       console.error('Erro no processamento do PDF:', err);
-      toast.error(err.message || 'Falha ao processar dados do PDF.');
+      toast.error(err.message || 'Falha ao processar dados do PDF. Verifique se o arquivo é um espelho de pedido válido.');
     } finally {
       setIsProcessing(false);
     }
