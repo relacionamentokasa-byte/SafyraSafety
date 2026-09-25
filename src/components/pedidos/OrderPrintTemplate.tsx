@@ -179,8 +179,9 @@ export function OrderPrintTemplate({ order, companySettings }: OrderPrintTemplat
 
         <div className="col-span-4 border border-slate-300 rounded-md p-2 bg-slate-50/50 flex flex-col justify-between">
           <div>
-            <h2 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 border-b border-slate-200 pb-1 mb-1.5">
-              Representação Comercial
+            <h2 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 border-b border-slate-200 pb-1 mb-1.5 flex items-center justify-between">
+              <span>Representação Comercial</span>
+              <span className="text-[9px] font-semibold text-primary uppercase tracking-wider">Safyra Safety</span>
             </h2>
             <div className="space-y-1 text-[10px]">
               <div>
@@ -199,6 +200,18 @@ export function OrderPrintTemplate({ order, companySettings }: OrderPrintTemplat
                   <span className="break-all">{representative.email}</span>
                 </div>
               )}
+            </div>
+
+            {/* Logo da Safyra Safety no Espaço de Representação Comercial */}
+            <div className="my-1.5 py-1 px-2 bg-white border border-slate-200 rounded flex items-center justify-center">
+              <img
+                src="/safyra-logo.png"
+                alt="Safyra Safety"
+                className="h-8 max-w-[120px] object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
             </div>
           </div>
 
