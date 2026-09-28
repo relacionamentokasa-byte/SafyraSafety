@@ -203,11 +203,11 @@ export function OrderPrintTemplate({ order, companySettings }: OrderPrintTemplat
             </div>
 
             {/* Logo da Safyra Safety no Espaço de Representação Comercial */}
-            <div className="my-1.5 py-1 px-2 bg-white border border-slate-200 rounded flex items-center justify-center">
+            <div className="my-2 flex items-center justify-center">
               <img
                 src="/safyra-logo.png"
                 alt="Safyra Safety"
-                className="h-8 max-w-[120px] object-contain"
+                className="h-16 w-auto max-w-[200px] object-contain drop-shadow-xs"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = "none";
                 }}
