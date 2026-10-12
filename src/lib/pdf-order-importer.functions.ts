@@ -482,19 +482,21 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   };
 
-  // 1. Número do Orçamento
+  // 1. Número do Orçamento / Pedido (Nutriex, Libus, Medix, etc.)
   const numMatch = text.match(/ORÇAMENTO DE VENDA\s*(\d+)/i) ||
     text.match(/Número\s+Token.*?\n(\d+)/is) ||
-    text.match(/Orçamento\s*[:#Nºn°]?\s*(\d+)/i) ||
-    text.match(/Pedido\s*[:#Nºn°]?\s*(\d+)/i);
+    text.match(/(?:Orçamento|Orcamento)\s*[:#Nºn°]?\s*(\d+)/i) ||
+    text.match(/(?:Pedido\s*(?:de\s*Venda)?|N[ºo°]\s*do\s*Pedido)\s*[:#Nºn°]?\s*(\d+)/i) ||
+    text.match(/N[ºo°]\s*[:#]?\s*(\d{4,10})/i) ||
+    text.match(/\b(?:MED|NX|LB)[-_]?(\d{4,8})\b/i);
   if (numMatch) data.budgetNumber = numMatch[1];
 
   // 2. Cliente (Procurar linha do CNPJ de 14 dígitos ou com formatação)
-  const cnpjMatch = text.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
+  const cnpjMatch = text.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/) || text.match(/\b\d{14}\b/);
   if (cnpjMatch) {
     data.client.cnpj = cnpjMatch[0];
   }
-  const cnpjLineIdx = lines.findIndex(l => /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/.test(l));
+  const cnpjLineIdx = lines.findIndex(l => /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/.test(l) || /\b\d{14}\b/.test(l.replace(/\D/g, '')));
   if (cnpjLineIdx !== -1) {
     data.client.cnpj = lines[cnpjLineIdx];
     if (cnpjLineIdx >= 3) {
@@ -503,9 +505,20 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
       data.client.tradeName = lines[cnpjLineIdx - 1];
     } else if (cnpjLineIdx >= 1) {
       data.client.tradeName = lines[cnpjLineIdx - 1];
+      data.client.legalName = lines[cnpjLineIdx - 1];
     }
     if (lines[cnpjLineIdx + 1]) data.client.ie = lines[cnpjLineIdx + 1];
     if (lines[cnpjLineIdx + 2]) data.client.phone = lines[cnpjLineIdx + 2];
+  }
+
+  // Fallback para nomes de cliente por rótulos (comum no layout Medix)
+  if (!data.client.tradeName && !data.client.legalName) {
+    const clientLabelMatch = text.match(/(?:Cliente|Razão Social|Destinatário)\s*[:]\s*([^\n\r]+)/i);
+    if (clientLabelMatch) {
+      const parsedClientName = clientLabelMatch[1].trim();
+      data.client.tradeName = parsedClientName;
+      data.client.legalName = parsedClientName;
+    }
   }
 
   // 3. Endereço
@@ -820,6 +833,22 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
     const defaultRep = reps?.find(r => r.name.toLowerCase().includes('mary') || r.name.toLowerCase().includes('antonia')) || reps?.[0];
     const matchedRepresentative = defaultRep ? { id: defaultRep.id, name: defaultRep.name } : null;
 
+    // Detectar fabricante pelo texto do pedido (Medix, Libus, Nutriex)
+    const upperText = extractedText.toUpperCase();
+    const isMedixOrder = upperText.includes('MEDIX');
+    const isLibusOrder = upperText.includes('LIBUS');
+    const isNutriexOrder = upperText.includes('NUTRIEX');
+
+    const { data: mfsList } = await supabaseAdmin.from('manufacturers').select('id, name');
+    let orderManufacturerId: string | null = null;
+    if (isMedixOrder) {
+      orderManufacturerId = mfsList?.find(m => m.name.toLowerCase().includes('medix'))?.id || null;
+    } else if (isLibusOrder) {
+      orderManufacturerId = mfsList?.find(m => m.name.toLowerCase().includes('libus'))?.id || null;
+    } else if (isNutriexOrder) {
+      orderManufacturerId = mfsList?.find(m => m.name.toLowerCase().includes('nutriex'))?.id || null;
+    }
+
     // 3. Cruzar Produtos por Código / SKU / Nome ou Criar sob Demanda
     const { data: allProducts } = await supabaseAdmin
       .from('products')
@@ -859,6 +888,7 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
       });
 
       const ptItem = prod ? priceItems?.find(pti => pti.product_id === prod.id) : null;
+      const targetMfgId = prod?.manufacturer_id || orderManufacturerId;
 
       return {
         pdfCode: item.code,
@@ -870,7 +900,7 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
           id: prod.id,
           name: prod.name,
           sku: prod.sku,
-          manufacturer_id: prod.manufacturer_id,
+          manufacturer_id: targetMfgId,
           manufacturer_name: (prod.manufacturer as any)?.name
         } : null,
         priceTableItemId: ptItem?.id || null,

@@ -36,6 +36,7 @@ interface OrderPDFImportModalProps {
 
 export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [matchedData, setMatchedData] = useState<MatchedPDFOrderData | null>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -54,6 +55,7 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
 
     setFileName(file.name);
     setIsProcessing(true);
+    setProcessingStatus('Lendo páginas do arquivo PDF...');
     setMatchedData(null);
 
     // Limpar o valor do input imediatamente para permitir selecionar o mesmo arquivo novamente caso haja ajuste
@@ -64,13 +66,16 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
     try {
       let extractedText = '';
 
-      // 1. Tentar extrair o texto diretamente no navegador via PDF.js empacotado
+      // 1. Tentar extrair o texto diretamente no navegador com fallback OCR para PDFs em curvas (ex: Medix)
       try {
-        extractedText = await extractTextFromPDFFile(file);
+        extractedText = await extractTextFromPDFFile(file, (msg) => {
+          setProcessingStatus(msg);
+        });
       } catch (clientErr) {
         console.warn('Extração client-side falhou, acionando fallback de leitura do arquivo:', clientErr);
       }
 
+      setProcessingStatus('Analisando cliente, produtos e totais...');
       let result: MatchedPDFOrderData;
 
       if (extractedText && extractedText.trim().length > 0) {
@@ -95,6 +100,7 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
       toast.error(err.message || 'Falha ao processar dados do PDF. Verifique se o arquivo é um espelho de pedido válido.');
     } finally {
       setIsProcessing(false);
+      setProcessingStatus('');
     }
   };
 
@@ -186,7 +192,9 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
               {isProcessing ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  <p className="text-sm font-semibold text-foreground">Analisando e cruzando dados do PDF...</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {processingStatus || 'Analisando e cruzando dados do PDF...'}
+                  </p>
                   <p className="text-xs text-muted-foreground">Localizando cliente, SKU, tabela de preços e condições comerciais.</p>
                 </div>
               ) : (
