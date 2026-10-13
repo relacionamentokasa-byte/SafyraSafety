@@ -668,7 +668,67 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   }
 
-  // ESTRATÉGIA C: Padrão Nutriex/Libus tabular compacto (Código isolado seguido de descrição e colunas numéricas)
+  // ESTRATÉGIA C: Linha OCR da Medix com colunas quebradas em várias linhas.
+  // O OCR pode retornar código, descrição, unidade, quantidade e preços como linhas independentes.
+  if (data.items.length === 0) {
+    const moneyPattern = /(?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?\d+\.\d{2}/g;
+    const codePattern = /^(?:\d{4,10}|[A-Z]{1,5}[-/]?\d{2,10})$/i;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (!codePattern.test(lines[i]) || isNonProductLine(lines[i])) continue;
+
+      const code = lines[i];
+      const window = lines.slice(i + 1, Math.min(lines.length, i + 10));
+      const descriptionParts: string[] = [];
+      let unit = 'UN';
+      let quantity = 0;
+      const prices: number[] = [];
+
+      for (const candidate of window) {
+        if (isNonProductLine(candidate)) break;
+        if (unitsRegex.test(candidate)) {
+          unit = candidate.toUpperCase();
+          continue;
+        }
+
+        const moneyMatches = candidate.match(moneyPattern);
+        if (moneyMatches) {
+          prices.push(...moneyMatches.map(parseMoney));
+          continue;
+        }
+
+        const integerMatch = candidate.match(/^(\d{1,5})$/);
+        if (integerMatch && quantity === 0) {
+          quantity = Number(integerMatch[1]);
+          continue;
+        }
+
+        if (!/^\d+$/.test(candidate) && candidate.length > 2) {
+          descriptionParts.push(candidate);
+        }
+      }
+
+      if (descriptionParts.length === 0 || quantity <= 0 || prices.length === 0) continue;
+
+      const validPrices = prices.filter(price => price > 0);
+      if (validPrices.length === 0) continue;
+      const unitPrice = validPrices.length >= 2 ? validPrices[validPrices.length - 2] : validPrices[0];
+      const totalPrice = validPrices[validPrices.length - 1] || quantity * unitPrice;
+
+      data.items.push({
+        code,
+        description: descriptionParts.join(' ').trim(),
+        unit,
+        quantity,
+        unitPrice,
+        totalPrice,
+      });
+      const endOfItem = window.findIndex(candidate => /total|subtotal/i.test(candidate));
+      if (endOfItem > 0) i += endOfItem;
+    }
+  }
+
+  // ESTRATÉGIA D: Padrão Nutriex/Libus tabular compacto (Código isolado seguido de descrição e colunas numéricas)
   if (data.items.length === 0) {
     for (let i = 0; i < lines.length - 2; i++) {
       const line = lines[i];
@@ -779,8 +839,13 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
   data.totals.totalAmount = extractedTotal || data.items.reduce((s, it) => s + it.totalPrice, 0);
   data.totals.units = data.items.reduce((s, it) => s + it.quantity, 0) || 1;
 
-  // ESTRATÉGIA D (GARANTIA INFALÍVEL): Se mesmo após todas as varreduras o PDF não tiver itens detalhados,
-  // mas tiver um valor de pedido ou cliente, criar um item consolidado com o valor total para nunca falhar a importação.
+  // Nunca transformar um pedido Medix sem linhas reconhecidas em um item genérico.
+  // Isso ocultaria uma falha do OCR e permitiria salvar um pedido sem os produtos reais.
+  if (data.items.length === 0 && /\bMEDIX\b/i.test(text)) {
+    throw new Error('Não foi possível identificar os itens do pedido Medix. O OCR leu o cabeçalho, mas não reconheceu a tabela de produtos.');
+  }
+
+  // Fallback consolidado para layouts antigos que não possuem itens detalhados.
   if (data.items.length === 0) {
     const finalVal = data.totals.totalAmount > 0 ? data.totals.totalAmount : 100.00;
     data.items.push({
@@ -887,7 +952,7 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
     // 3. Cruzar Produtos por Código / SKU / Nome ou Criar sob Demanda
     const { data: allProducts } = await supabaseAdmin
       .from('products')
-      .select('id, name, sku, manufacturer_id, manufacturer:manufacturers(name)');
+      .select('id, name, code, sku, manufacturer_id, manufacturer:manufacturers(name)');
 
     // Buscar tabelas de preço ativas
     const { data: priceItems } = await supabaseAdmin
@@ -898,15 +963,25 @@ export const processOrderPDFServer = createServerFn({ method: "POST" })
       const cleanCode = item.code.trim();
       const cleanDesc = (item.description || '').toLowerCase();
 
+      const normalizedCode = cleanCode.replace(/\s+/g, '').replace(/^0+/, '') || cleanCode;
       let prod = allProducts?.find(p => {
+        const codeClean = (p.code || '').trim();
         const skuClean = (p.sku || '').trim();
+        const catalogCodes = [codeClean, skuClean]
+          .map(value => value.replace(/\s+/g, '').replace(/^0+/, '').toLowerCase())
+          .filter(Boolean);
         const pName = (p.name || '').toLowerCase();
 
-        // Match exato ou parcial por código/SKU
+        // O código da indústria é a chave principal; SKU fica como compatibilidade.
+        if (normalizedCode && catalogCodes.some(code =>
+          code === normalizedCode.toLowerCase() ||
+          code === cleanCode.toLowerCase() ||
+          code.endsWith(normalizedCode.toLowerCase())
+        )) {
+          return true;
+        }
+
         if (cleanCode && (
-          skuClean === cleanCode ||
-          skuClean.endsWith(cleanCode) ||
-          skuClean === `00${cleanCode}` ||
           (p.name || '').includes(`(${cleanCode})`) ||
           (p.name || '').includes(`(00${cleanCode})`) ||
           (p.name || '').includes(cleanCode)

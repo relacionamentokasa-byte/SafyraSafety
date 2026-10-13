@@ -184,12 +184,49 @@ async function renderPdfAndRunOcr(
         recognizedText += tablePass.data.text + '\n';
       }
 
-      await worker.setParameters({ tessedit_pageseg_mode: '11' });
+      // A tabela costuma ser a região mais baixa e densa dos espelhos Medix.
+      // OCR em um recorte aumenta a separação entre código, quantidade e preços.
+      const tableCanvas = document.createElement('canvas');
+      const tableTop = Math.floor(canvas.height * 0.38);
+      tableCanvas.width = canvas.width;
+      tableCanvas.height = canvas.height - tableTop;
+      const tableContext = tableCanvas.getContext('2d', { willReadFrequently: true });
+      if (tableContext) {
+        tableContext.drawImage(
+          canvas,
+          0,
+          tableTop,
+          canvas.width,
+          canvas.height - tableTop,
+          0,
+          0,
+          tableCanvas.width,
+          tableCanvas.height
+        );
+
+        await worker.setParameters({
+          tessedit_pageseg_mode: '6',
+          preserve_interword_spaces: '1',
+        });
+        const tableCropPass = await worker.recognize(tableCanvas, {}, { text: true });
+        if (tableCropPass?.data?.text) {
+          recognizedText += tableCropPass.data.text + '\n';
+        }
+
+        await worker.setParameters({ tessedit_pageseg_mode: '11' });
+        const sparseCropPass = await worker.recognize(tableCanvas, {}, { text: true });
+        if (sparseCropPass?.data?.text) {
+          recognizedText += sparseCropPass.data.text + '\n';
+        }
+      }
+
+      await worker.setParameters({ tessedit_pageseg_mode: '6' });
       const sparsePass = await worker.recognize(canvas, {}, { text: true });
       if (sparsePass?.data?.text) {
         recognizedText += sparsePass.data.text + '\n';
       }
       await worker.setParameters({ tessedit_pageseg_mode: '6' });
+      void sparsePass;
     }
   } finally {
     await worker.terminate();
