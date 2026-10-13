@@ -22,7 +22,7 @@ export async function extractTextFromPDFFile(
   // Tentativa 1: pdfjs-dist empacotado com worker local do Vite
   let text = '';
   try {
-    text = await parseWithPdfJs(uint8, pdfWorkerUrl);
+    text = await parseWithPdfJs(uint8.slice(), pdfWorkerUrl);
   } catch (err1) {
     console.warn('[PDF Extractor] Tentativa 1 (Worker Vite) falhou:', err1);
   }
@@ -30,7 +30,7 @@ export async function extractTextFromPDFFile(
   // Tentativa 2: pdfjs-dist desativando o worker (execução síncrona na thread principal)
   if (!text || text.trim().length === 0) {
     try {
-      text = await parseWithPdfJs(uint8, false);
+      text = await parseWithPdfJs(uint8.slice(), false);
     } catch (err2) {
       console.warn('[PDF Extractor] Tentativa 2 (Sem Worker) falhou:', err2);
     }
@@ -40,7 +40,7 @@ export async function extractTextFromPDFFile(
   if (!text || text.trim().length === 0) {
     try {
       const cdnWorker = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-      text = await parseWithPdfJs(uint8, cdnWorker);
+      text = await parseWithPdfJs(uint8.slice(), cdnWorker);
     } catch (err3) {
       console.warn('[PDF Extractor] Tentativa 3 (CDN Worker) falhou:', err3);
     }
@@ -60,14 +60,16 @@ export async function extractTextFromPDFFile(
       return ocrText;
     }
   } catch (ocrErr) {
-    console.warn('[PDF Extractor] Falha no fallback de OCR:', ocrErr);
+    console.error('[PDF Extractor] Falha no fallback de OCR:', ocrErr);
+    const reason = ocrErr instanceof Error ? ocrErr.message : String(ocrErr);
+    throw new Error(`OCR falhou durante a leitura do PDF: ${reason}`);
   }
 
   if (text && text.trim().length > 0) {
     return text;
   }
 
-  throw new Error('Não foi possível ler as páginas do arquivo PDF. O documento pode estar protegido ou ilegível.');
+  throw new Error('OCR não retornou texto para este PDF.');
 }
 
 async function parseWithPdfJs(uint8: Uint8Array, workerSrc: string | false): Promise<string> {
@@ -80,7 +82,7 @@ async function parseWithPdfJs(uint8: Uint8Array, workerSrc: string | false): Pro
   }
 
   const loadingTask = pdfjsLib.getDocument({
-    data: uint8,
+    data: new Uint8Array(uint8),
     isEvalSupported: false,
     useSystemFonts: true,
   });
@@ -112,7 +114,7 @@ async function renderPdfAndRunOcr(
   }
 
   const loadingTask = pdfjsLib.getDocument({
-    data: uint8,
+    data: new Uint8Array(uint8),
     isEvalSupported: false,
     useSystemFonts: true,
   });
@@ -121,6 +123,7 @@ async function renderPdfAndRunOcr(
   let recognizedText = '';
 
   // Carrega dinamicamente o Tesseract.js para não impactar o bundle inicial
+  await assertOcrAssets(onProgress);
   const { createWorker } = await import('tesseract.js');
   const worker = await createWorker('por', undefined, {
     workerPath: '/tesseract/worker.min.js',
@@ -168,4 +171,26 @@ async function renderPdfAndRunOcr(
   }
 
   return recognizedText;
+}
+
+async function assertOcrAssets(onProgress?: (msg: string) => void): Promise<void> {
+  const assets = [
+    '/tesseract/worker.min.js',
+    '/tesseract/core/tesseract-core.wasm.js',
+    '/tesseract/core/tesseract-core-lstm.wasm.js',
+    '/tesseract/core/tesseract-core-simd.wasm.js',
+    '/tesseract/core/tesseract-core-simd-lstm.wasm.js',
+    '/tesseract/core/tesseract-core-relaxedsimd.wasm.js',
+    '/tesseract/core/tesseract-core-relaxedsimd-lstm.wasm.js',
+    '/tesseract/lang/por.traineddata.gz',
+  ];
+
+  for (const asset of assets) {
+    const response = await fetch(asset, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error(`Asset OCR indisponível (${response.status}): ${asset}`);
+    }
+  }
+
+  if (onProgress) onProgress('Assets locais do OCR verificados.');
 }
