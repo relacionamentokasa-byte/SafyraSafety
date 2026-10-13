@@ -73,8 +73,9 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
         });
       } catch (clientErr) {
         console.error('[PDF Import] Falha na extração/OCR:', clientErr);
+        const technicalReason = clientErr instanceof Error ? clientErr.message : String(clientErr);
         throw new Error(
-          'Não foi possível ler este PDF. O arquivo da Medix precisa de OCR, mas o mecanismo de leitura não conseguiu carregar.'
+          `Não foi possível ler este PDF. O arquivo da Medix precisa de OCR, mas o mecanismo de leitura não conseguiu carregar. Detalhe: ${technicalReason}`
         );
       }
 
@@ -87,7 +88,15 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
         data: { rawText: extractedText }
       });
 
-
+      const invalidItems = result.matchedItems.filter(
+        (item) => item.quantity <= 0 || item.unitPrice <= 0 || item.totalPrice <= 0
+      );
+      const hasDetailedItems = result.matchedItems.length > 0 && invalidItems.length === 0;
+      if (!hasDetailedItems) {
+        throw new Error(
+          'O OCR leu o PDF, mas não identificou itens detalhados com preços válidos. O pedido não foi criado para evitar dados incorretos.'
+        );
+      }
 
       setMatchedData(result);
       toast.success(`PDF "${file.name}" processado com sucesso!`);

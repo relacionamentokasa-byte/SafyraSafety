@@ -137,6 +137,12 @@ async function renderPdfAndRunOcr(
     },
   });
 
+  await worker.setParameters({
+    tessedit_pageseg_mode: '6',
+    preserve_interword_spaces: '1',
+    user_defined_dpi: '300',
+  });
+
   if (onProgress) onProgress('OCR carregado. Reconhecendo texto...');
 
   try {
@@ -146,13 +152,13 @@ async function renderPdfAndRunOcr(
       }
 
       const page = await pdfDoc.getPage(pageNum);
-      // Escala 2.0x para máxima nitidez de leitura de números, SKUs e tabelas
-      const viewport = page.getViewport({ scale: 2.0 });
+      // Maior resolução melhora a leitura de códigos, quantidades e valores da tabela.
+      const viewport = page.getViewport({ scale: 3.0 });
 
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       if (!ctx) continue;
 
@@ -161,10 +167,29 @@ async function renderPdfAndRunOcr(
         viewport,
       }).promise;
 
-      const ret = await worker.recognize(canvas);
-      if (ret?.data?.text) {
-        recognizedText += ret.data.text + '\n';
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < image.data.length; i += 4) {
+        const gray = Math.round(
+          image.data[i] * 0.299 + image.data[i + 1] * 0.587 + image.data[i + 2] * 0.114
+        );
+        const contrast = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+        image.data[i] = contrast;
+        image.data[i + 1] = contrast;
+        image.data[i + 2] = contrast;
       }
+      ctx.putImageData(image, 0, 0);
+
+      const tablePass = await worker.recognize(canvas, {}, { text: true });
+      if (tablePass?.data?.text) {
+        recognizedText += tablePass.data.text + '\n';
+      }
+
+      await worker.setParameters({ tessedit_pageseg_mode: '11' });
+      const sparsePass = await worker.recognize(canvas, {}, { text: true });
+      if (sparsePass?.data?.text) {
+        recognizedText += sparsePass.data.text + '\n';
+      }
+      await worker.setParameters({ tessedit_pageseg_mode: '6' });
     }
   } finally {
     await worker.terminate();

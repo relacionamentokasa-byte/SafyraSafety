@@ -449,7 +449,22 @@ function cleanCnpj(cnpj: string): string {
  * Multi-estratégia para garantir extração 100% resiliente de qualquer espelho/layout de fábrica
  */
 export function extractOrderFromText(text: string): ParsedPDFOrder {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const isNonProductLine = (line: string) =>
+    /^(?:total|subtotal|total\s+(?:geral|do pedido|líquido)|valor total|observação|observacoes|frete|desconto)\b/i.test(line) ||
+    /^(?:item|c[oó]digo|descri[cç][aã]o|produto|quantidade|qtde|pre[cç]o)\b/i.test(line);
+  const parseMoney = (value: string): number => {
+    const normalized = value.replace(/R\$|\s/gi, '').trim();
+    if (!normalized) return 0;
+    const br = normalized.match(/^\d{1,3}(?:\.\d{3})*,\d{2}$/);
+    if (br) return Number(normalized.replace(/\./g, '').replace(',', '.')) || 0;
+    const us = normalized.match(/^\d+(?:\.\d{2})?$/);
+    if (us) return Number(normalized) || 0;
+    return Number(normalized.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+  };
 
   const data: ParsedPDFOrder = {
     budgetNumber: '',
@@ -588,10 +603,11 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
       const line = lines[i]?.toUpperCase()?.trim();
       if (unitsRegex.test(line)) {
         const unit = line;
+        if (isNonProductLine(lines[i - 1] || '') || isNonProductLine(lines[i + 1] || '')) continue;
         const qRaw = (lines[i + 1] || '').replace(/[^\d.,]/g, '').replace(',', '.');
         const quantity = parseFloat(qRaw) || 1;
-        const unitPrice = parseFloat((lines[i + 2] || '0').replace(/\./g, '').replace(',', '.')) || 0;
-        const totalPrice = parseFloat((lines[i + 4] || lines[i + 3] || '0').replace(/\./g, '').replace(',', '.')) || (quantity * unitPrice);
+        const unitPrice = parseMoney(lines[i + 2] || '');
+        const totalPrice = parseMoney(lines[i + 4] || lines[i + 3] || '') || (quantity * unitPrice);
 
         let code = '';
         let descParts: string[] = [];
@@ -718,6 +734,25 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
       }
     }
   }
+
+  // Remover falsos positivos do OCR antes de calcular totais.
+  const uniqueItems = new Map<string, ParsedPDFOrder['items'][number]>();
+  for (const item of data.items) {
+    const description = item.description.trim();
+    if (
+      isNonProductLine(description) ||
+      description.length < 3 ||
+      item.quantity <= 0 ||
+      item.unitPrice <= 0 ||
+      item.totalPrice <= 0
+    ) {
+      continue;
+    }
+
+    const key = [item.code.trim().toUpperCase(), description.toUpperCase(), item.quantity, item.unitPrice, item.totalPrice].join('|');
+    if (!uniqueItems.has(key)) uniqueItems.set(key, { ...item, description });
+  }
+  data.items = [...uniqueItems.values()];
 
   // 6. Totais e Fallback de Itens
   let extractedTotal = 0;
