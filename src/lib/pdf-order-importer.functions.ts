@@ -728,7 +728,100 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   }
 
-  // ESTRATÉGIA D: Padrão Nutriex/Libus tabular compacto (Código isolado seguido de descrição e colunas numéricas)
+  // ESTRATÉGIA D: Linha OCR flexível da Medix com código, descrição, quantidade e preços na mesma linha.
+  if (data.items.length === 0) {
+    const flexibleMoney = /(?:R\$\s*)?(\d{1,3}(?:[.\s]\d{3})*[,.]\d{2}|\d+[,.]\d{2})/g;
+    const flexibleCode = /\b(?:\d{4,10}|[A-Z]{1,5}[-/]?\d{2,10})\b/i;
+
+    for (const line of lines) {
+      if (isNonProductLine(line)) continue;
+      const codeMatch = line.match(flexibleCode);
+      const moneyMatches = [...line.matchAll(flexibleMoney)];
+      if (!codeMatch || moneyMatches.length === 0) continue;
+
+      const code = codeMatch[0];
+      const values = moneyMatches.map(match => parseMoney(match[1])).filter(value => value > 0);
+      if (values.length === 0) continue;
+
+      const beforePrices = line.slice((codeMatch.index || 0) + code.length, moneyMatches[0].index).trim();
+      const quantityMatch = beforePrices.match(/\b(\d{1,5})\b/);
+      const unitMatch = beforePrices.match(/\b(UN|CX|PC|PAR|KG|PCT|RL|FD|CJ|PÇ|PR|PCE|PA|M)\b/i);
+      const description = beforePrices
+        .replace(/\b\d{1,5}\b/g, ' ')
+        .replace(/\b(UN|CX|PC|PAR|KG|PCT|RL|FD|CJ|PÇ|PR|PCE|PA|M)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const quantity = quantityMatch ? Number(quantityMatch[1]) : 1;
+      const unitPrice = values.length > 1 ? values[values.length - 2] : values[0];
+      const totalPrice = values[values.length - 1] || quantity * unitPrice;
+
+      if (description.length >= 3 && quantity > 0 && unitPrice > 0 && totalPrice > 0) {
+        data.items.push({
+          code,
+          description,
+          unit: (unitMatch?.[1] || 'UN').toUpperCase(),
+          quantity: Math.round(quantity),
+          unitPrice,
+          totalPrice,
+        });
+      }
+    }
+  }
+
+  // ESTRATÉGIA E: Bloco OCR com código isolado e descrição/preços nas linhas seguintes.
+  if (data.items.length === 0) {
+    const flexibleMoney = /(?:R\$\s*)?(\d{1,3}(?:[.\s]\d{3})*[,.]\d{2}|\d+[,.]\d{2})/g;
+    const flexibleCode = /^(?:\d{4,10}|[A-Z]{1,5}[-/]?\d{2,10})$/i;
+
+    for (let i = 0; i < lines.length; i++) {
+      const code = lines[i];
+      if (!flexibleCode.test(code) || isNonProductLine(code)) continue;
+
+      const window = lines.slice(i + 1, Math.min(i + 8, lines.length));
+      const descriptionParts: string[] = [];
+      const values: number[] = [];
+      let quantity = 0;
+      let unit = 'UN';
+
+      for (const candidate of window) {
+        if (isNonProductLine(candidate)) break;
+        if (unitsRegex.test(candidate)) {
+          unit = candidate.toUpperCase();
+          continue;
+        }
+        const moneyMatches = [...candidate.matchAll(flexibleMoney)];
+        if (moneyMatches.length > 0) {
+          values.push(...moneyMatches.map(match => parseMoney(match[1])).filter(value => value > 0));
+          continue;
+        }
+        const integerMatch = candidate.match(/^(\d{1,5})$/);
+        if (integerMatch && quantity === 0) {
+          quantity = Number(integerMatch[1]);
+          continue;
+        }
+        if (candidate.length >= 3 && !/^\d+$/.test(candidate)) {
+          descriptionParts.push(candidate);
+        }
+      }
+
+      if (descriptionParts.length > 0 && quantity > 0 && values.length > 0) {
+        const unitPrice = values.length > 1 ? values[values.length - 2] : values[0];
+        const totalPrice = values[values.length - 1] || quantity * unitPrice;
+        if (unitPrice > 0 && totalPrice > 0) {
+          data.items.push({
+            code,
+            description: descriptionParts.join(' '),
+            unit,
+            quantity,
+            unitPrice,
+            totalPrice,
+          });
+        }
+      }
+    }
+  }
+
+  // ESTRATÉGIA F: Padrão Nutriex/Libus tabular compacto (Código isolado seguido de descrição e colunas numéricas)
   if (data.items.length === 0) {
     for (let i = 0; i < lines.length - 2; i++) {
       const line = lines[i];
