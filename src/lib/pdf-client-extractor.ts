@@ -122,7 +122,19 @@ async function renderPdfAndRunOcr(
 
   // Carrega dinamicamente o Tesseract.js para não impactar o bundle inicial
   const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('por');
+  const worker = await createWorker('por', undefined, {
+    workerPath: '/tesseract/worker.min.js',
+    corePath: '/tesseract/core/tesseract-core.wasm.js',
+    langPath: '/tesseract/lang',
+    workerBlobURL: false,
+    logger: (message: { status?: string; progress?: number }) => {
+      if (message.status === 'recognizing text' && onProgress) {
+        onProgress(`OCR: ${Math.round((message.progress || 0) * 100)}%`);
+      }
+    },
+  });
+
+  if (onProgress) onProgress('OCR carregado. Reconhecendo texto...');
 
   try {
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {

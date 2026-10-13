@@ -66,32 +66,28 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
     try {
       let extractedText = '';
 
-      // 1. Tentar extrair o texto diretamente no navegador com fallback OCR para PDFs em curvas (ex: Medix)
+      // A leitura é feita no navegador porque PDFs vetorizados da Medix não possuem camada de texto.
       try {
         extractedText = await extractTextFromPDFFile(file, (msg) => {
           setProcessingStatus(msg);
         });
       } catch (clientErr) {
-        console.warn('Extração client-side falhou, acionando fallback de leitura do arquivo:', clientErr);
+        console.error('[PDF Import] Falha na extração/OCR:', clientErr);
+        throw new Error(
+          'Não foi possível ler este PDF. O arquivo da Medix precisa de OCR, mas o mecanismo de leitura não conseguiu carregar.'
+        );
+      }
+
+      if (!extractedText.trim()) {
+        throw new Error('O PDF não contém texto legível após o OCR.');
       }
 
       setProcessingStatus('Analisando cliente, produtos e totais...');
-      let result: MatchedPDFOrderData;
+      const result: MatchedPDFOrderData = await processOrderPDFServer({
+        data: { rawText: extractedText }
+      });
 
-      if (extractedText && extractedText.trim().length > 0) {
-        // Enviar o texto extraído diretamente
-        result = await processOrderPDFServer({ data: { rawText: extractedText } });
-      } else {
-        // Fallback: converter arquivo para Base64 e enviar para o backend
-        const arrayBuffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
-        result = await processOrderPDFServer({ data: { base64Pdf: base64 } });
-      }
+
 
       setMatchedData(result);
       toast.success(`PDF "${file.name}" processado com sucesso!`);
