@@ -668,7 +668,37 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
     }
   }
 
-  // ESTRATÉGIA C: Linha OCR da Medix com colunas quebradas em várias linhas.
+  // ESTRATÉGIA C: Linha tabular nativa da Medix após OCR.
+  // Exemplo: 12132 LUVA ... 0,00 500 15,000000 7.500,00 N 31/10/2026 N
+  if (data.items.length === 0) {
+    const medixRow = /^(\d{4,10})\s+(.+?)\s+0[,.]00\s+(\d{1,6})\s+(\d+(?:[,.]\d{2,6}))\s+(\d{1,3}(?:\.\d{3})*,\d{2})\b/i;
+
+    for (const line of lines) {
+      if (isNonProductLine(line)) continue;
+      const match = line.match(medixRow);
+      if (!match) continue;
+
+      const quantity = Number(match[3]);
+      const unitPrice = parseMoney(match[4]);
+      const totalPrice = parseMoney(match[5]);
+      const description = match[2]
+        .replace(/\s+(?:cr|CAIXA\s+C\/\s*\d+\s*CT)\s*$/i, '')
+        .trim();
+
+      if (description && quantity > 0 && unitPrice > 0 && totalPrice > 0) {
+        data.items.push({
+          code: match[1],
+          description,
+          unit: 'UN',
+          quantity,
+          unitPrice,
+          totalPrice,
+        });
+      }
+    }
+  }
+
+  // ESTRATÉGIA D: Linha OCR da Medix com colunas quebradas em várias linhas.
   // O OCR pode retornar código, descrição, unidade, quantidade e preços como linhas independentes.
   if (data.items.length === 0) {
     const moneyPattern = /(?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?\d+\.\d{2}/g;
