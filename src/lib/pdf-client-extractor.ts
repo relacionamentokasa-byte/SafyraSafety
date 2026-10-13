@@ -125,7 +125,7 @@ async function renderPdfAndRunOcr(
   const worker = await createWorker('por', undefined, {
     workerPath: '/tesseract/worker.min.js',
     corePath: '/tesseract/core',
-    langPath: '/tesseract/lang',
+    langPath: '/tesseract/lang/',
     workerBlobURL: false,
     logger: (message: { status?: string; progress?: number }) => {
       if (message.status === 'recognizing text' && onProgress) {
