@@ -124,7 +124,7 @@ async function renderPdfAndRunOcr(
   const { createWorker } = await import('tesseract.js');
   const worker = await createWorker('por', undefined, {
     workerPath: '/tesseract/worker.min.js',
-    corePath: '/tesseract/core/tesseract-core.wasm.js',
+    corePath: '/tesseract/core',
     langPath: '/tesseract/lang',
     workerBlobURL: false,
     logger: (message: { status?: string; progress?: number }) => {
