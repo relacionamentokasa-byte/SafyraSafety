@@ -582,13 +582,44 @@ export function extractOrderFromText(text: string): ParsedPDFOrder {
   // 5. Extração de Itens (Multi-Estratégia Resiliente)
   const unitsRegex = /^(UN|CX|PC|PAR|KG|L|PCT|RL|FD|CJ|PÇ|PR|PCE|PA|M|ROLO|FARDO|LATA|GAL|KIT)$/i;
 
+  // ESTRATÉGIA MEDIX PRIORITÁRIA: processar uma linha de produto por vez.
+  // Nunca usar o texto inteiro normalizado aqui, pois isso pode associar o número do pedido
+  // (ex.: 304154) aos preços da primeira linha da tabela.
+  if (/\bMEDIX\b/i.test(text)) {
+    const medixRowLine = /^(\d{4,10})\s+(.+?)\s+0[,.]00\s+(\d{1,6})\s+(\d+(?:[,.]\d{2,6}))\s+(\d{1,3}(?:\.\d{3})*,\d{2})\b/i;
+    for (const line of lines) {
+      const match = line.replace(/\s+/g, ' ').trim().match(medixRowLine);
+      if (!match) continue;
+
+      const quantity = Number(match[3]);
+      const unitPrice = parseMoney(match[4]);
+      const totalPrice = parseMoney(match[5]);
+      const description = match[2]
+        .replace(/\s+(?:cr|CAIXA\s+C\/\s*\d+\s*CT)\s*$/i, '')
+        .trim();
+
+      if (description && quantity > 0 && unitPrice > 0 && totalPrice > 0) {
+        data.items.push({
+          code: match[1],
+          description,
+          unit: 'UN',
+          quantity,
+          unitPrice,
+          totalPrice,
+        });
+      }
+    }
+  }
+
   // ESTRATÉGIA A: Formato de Colunas / Tabela Nutriex e Libus (Unidade na linha ou próxima)
   const itemsStartIdx = lines.findIndex(l =>
+    data.items.length > 0 ? false : (
     l === 'ITENS' ||
     l === 'PRODUTOS' ||
     (l.includes('Código') && l.includes('Qtde')) ||
     (l.includes('Item') && l.includes('Descrição')) ||
     l.includes('Itens do Pedido')
+    )
   );
   const totalsIdx = lines.findIndex(l =>
     l.includes('Total de Unidades') ||
