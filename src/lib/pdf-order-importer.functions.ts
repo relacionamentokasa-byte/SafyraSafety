@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export interface ParsedPDFOrder {
   budgetNumber: string;
@@ -75,10 +74,9 @@ export interface MatchedPDFOrderData {
  * blindar o fluxo contra bloqueios de RLS no cliente/pedido/itens/comissões.
  */
 export const saveImportedOrderServer = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((data: { matchedData: MatchedPDFOrderData }) => data)
-  .handler(async ({ data, context }): Promise<{ orderId: string; orderNumber: string }> => {
-    const { matchedData } = data;
+  .validator((data: { matchedData: MatchedPDFOrderData; userId?: string | null }) => data)
+  .handler(async ({ data }): Promise<{ orderId: string; orderNumber: string }> => {
+    const { matchedData, userId } = data;
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // 1. Tentar executar a gravação atômica via RPC (SECURITY DEFINER)
@@ -87,7 +85,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     try {
       const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('import_pdf_order_atomic', {
         p_order_data: matchedData,
-        p_user_id: context.userId
+        p_user_id: userId || null
       });
 
       if (!rpcError && rpcResult && (rpcResult as any).orderId) {
@@ -121,14 +119,16 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
       }
 
       if (!clientId) {
-        // Buscar o representante correto do usuário logado para satisfazer RLS em qualquer cenário
-        const { data: userRep } = await supabaseAdmin
-          .from('representatives')
-          .select('id')
-          .eq('user_id', context.userId)
-          .maybeSingle();
-
-        const targetRepId = userRep?.id || matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
+        // Buscar o representante correto do usuário para satisfazer RLS em qualquer cenário
+        let targetRepId = matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
+        if (userId) {
+          const { data: userRep } = await supabaseAdmin
+            .from('representatives')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (userRep?.id) targetRepId = userRep.id;
+        }
 
         const clientPayload = {
           name: matchedData.parsed.client.tradeName || matchedData.parsed.client.legalName || 'Cliente Importado',
@@ -144,7 +144,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
           zip_code: matchedData.parsed.client.address.zip,
           representative_id: targetRepId,
           status: 'active',
-          created_by: context.userId
+          created_by: userId || null
         };
 
         const { data: adminClient, error: adminErr } = await supabaseAdmin
@@ -270,13 +270,15 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
     const orderNumber = matchedData.parsed.budgetNumber || String(Math.floor(100000 + Math.random() * 900000));
     const totalAmount = matchedData.parsed.totals.totalAmount || validItems.reduce((s, i) => s + i.totalPrice, 0);
 
-    const { data: userRepForOrder } = await supabaseAdmin
-      .from('representatives')
-      .select('id')
-      .eq('user_id', context.userId)
-      .maybeSingle();
-
-    const finalRepId = userRepForOrder?.id || matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
+    let finalRepId = matchedData.matchedRepresentative?.id || '126a6950-ddf5-452b-8b5e-feecc4ad8bfa';
+    if (userId) {
+      const { data: userRepForOrder } = await supabaseAdmin
+        .from('representatives')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (userRepForOrder?.id) finalRepId = userRepForOrder.id;
+    }
 
     // Verificar se já existe pedido com este número de orçamento
     const { data: existingOrder } = await supabaseAdmin
@@ -327,7 +329,7 @@ export const saveImportedOrderServer = createServerFn({ method: "POST" })
         payment_condition: matchedData.parsed.paymentCondition || '28/35/42',
         payment_term: matchedData.parsed.shippingType ? `${matchedData.parsed.shippingType}` : 'CIF',
         billing_notes: `Importado automaticamente via PDF da Indústria (Token: ${matchedData.parsed.token || '-'})`,
-        created_by: context.userId,
+        created_by: userId || null,
         created_at: new Date().toISOString()
       };
 

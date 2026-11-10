@@ -129,9 +129,15 @@ export function OrderPDFImportModal({ open, onOpenChange }: OrderPDFImportModalP
         finalOrderId = (rpcResult as any).orderId;
         finalOrderNumber = (rpcResult as any).orderNumber || matchedData.parsed.budgetNumber || 'PED-IMPORT';
       } else {
+        if (rpcError) {
+          console.warn('[PDF Import Modal] RPC retornou erro ou não encontrada, acionando gravação via Server Function:', rpcError.message);
+        }
         // Fallback para Server Function
         const serverResult = await saveImportedOrderServer({
-          data: { matchedData }
+          data: {
+            matchedData,
+            userId: user?.id || null,
+          }
         });
         finalOrderId = serverResult.orderId;
         finalOrderNumber = serverResult.orderNumber;
