@@ -860,49 +860,68 @@ export const deleteOrderPermanently = createServerFn({ method: "POST" })
       return { success: true, data: rpcData };
     }
 
-    // Fallback: caso a RPC ainda não esteja aplicada, executar a limpeza em cascata direta
-    console.warn("[deleteOrderPermanently] RPC indisponível ou falhou, tentando limpeza direta:", rpcError);
+    // Fallback seguro via supabaseAdmin (Service Role)
+    console.warn("[deleteOrderPermanently] RPC falhou ou ausente, executando exclusão com supabaseAdmin:", rpcError);
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
 
     // 1. Obter pagamentos para limpar comissões vinculadas
-    const { data: payments } = await supabase
+    const { data: payments } = await supabaseAdmin
       .from('order_payments')
       .select('id')
       .eq('order_id', orderId);
 
     if (payments && payments.length > 0) {
       const paymentIds = payments.map((p) => p.id);
-      await supabase
+      // Limpar commission_logs se existirem
+      try {
+        await (supabaseAdmin as any)
+          .from('commission_logs')
+          .delete()
+          .in('commission_id', paymentIds);
+      } catch (e) {
+        // Tabela opcional/logs
+      }
+
+      await supabaseAdmin
         .from('commissions')
         .delete()
         .in('order_payment_id', paymentIds);
     }
 
     // 2. Limpar comissões diretas do pedido
-    await supabase
+    await supabaseAdmin
       .from('commissions')
       .delete()
       .eq('order_id', orderId);
 
     // 3. Limpar order_payments
-    await supabase
+    await supabaseAdmin
       .from('order_payments')
       .delete()
       .eq('order_id', orderId);
 
     // 4. Limpar order_items
-    await supabase
+    await supabaseAdmin
       .from('order_items')
       .delete()
       .eq('order_id', orderId);
 
-    // 5. Limpar order_history (se as permissões permitirem)
-    await supabase
+    // 5. Limpar order_history
+    await supabaseAdmin
       .from('order_history')
       .delete()
       .eq('order_id', orderId);
 
-    // 6. Excluir o pedido da tabela orders
-    const { error: orderDeleteError } = await supabase
+    // 6. Limpar order_requests se houver
+    try {
+      await (supabaseAdmin as any)
+        .from('order_requests')
+        .delete()
+        .eq('order_id', orderId);
+    } catch (e) {}
+
+    // 7. Excluir o pedido da tabela orders
+    const { error: orderDeleteError } = await supabaseAdmin
       .from('orders')
       .delete()
       .eq('id', orderId);

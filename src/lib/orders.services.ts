@@ -5,6 +5,7 @@ import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { ensureClientInDatabase, isUuid } from "@/lib/clients.services";
 import type { OrderFormValues } from "@/lib/orders.schema";
 import { loadPublishedPaymentCatalog } from "@/lib/payment-plans";
+import { deleteOrderPermanently } from "@/lib/orders.functions";
 
 type CreateOrderPayload = {
   idempotency_key: string;
@@ -118,9 +119,19 @@ export async function deleteOrderPermanentlyDirect(orderId: string): Promise<voi
     return;
   }
 
-  console.warn("[deleteOrderPermanentlyDirect] RPC falhou ou não encontrada, tentando cascata direta:", rpcError);
+  console.warn("[deleteOrderPermanentlyDirect] RPC falhou ou não encontrada, tentando Server Function:", rpcError);
 
-  // 2. Limpeza em cascata no cliente autenticado
+  // 2. Chamar a Server Function deleteOrderPermanently que roda com supabaseAdmin no servidor
+  try {
+    const serverResult = await deleteOrderPermanently({ data: { orderId } });
+    if (serverResult && (serverResult as any).success) {
+      return;
+    }
+  } catch (serverErr: any) {
+    console.warn("[deleteOrderPermanentlyDirect] Server function falhou, tentando fallback cliente:", serverErr);
+  }
+
+  // 3. Fallback no cliente autenticado
   const { data: payments } = await supabase
     .from('order_payments')
     .select('id')
